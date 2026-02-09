@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "TravelCostAssist",
+    "slug": "travelcostassist",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1565C0"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.travelcostassist.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Die App benötigt Zugriff auf die Kamera, um Belege zu fotografieren.",
+        "NSPhotoLibraryUsageDescription": "Die App benötigt Zugriff auf die Fotobibliothek, um Belegbilder auszuwählen."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1565C0"
+      },
+      "package": "com.travelcostassist.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Die App benötigt Zugriff auf die Kamera, um Belege zu fotografieren."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Die App benötigt Zugriff auf Ihre Fotos, um Belegbilder auszuwählen."
+        }
+      ]
+    ]
+  }
+}
