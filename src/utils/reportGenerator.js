@@ -1,5 +1,6 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { getCategoryLabel } from './categories';
@@ -86,6 +87,39 @@ const buildReportData = (trips, allExpenses) => {
 };
 
 // ==========================================
+// Receipt Image Loading
+// ==========================================
+
+const loadReceiptImages = async (expenses) => {
+  const receiptMap = {};
+
+  for (const expense of expenses) {
+    const uris = expense.receiptUris || (expense.receiptUri ? [expense.receiptUri] : []);
+    if (uris.length === 0) continue;
+
+    const images = [];
+    for (const uri of uris) {
+      try {
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const ext = uri.split('.').pop().toLowerCase();
+        const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+        images.push(`data:${mime};base64,${base64}`);
+      } catch (err) {
+        console.warn('Could not load receipt image:', uri, err.message);
+      }
+    }
+
+    if (images.length > 0) {
+      receiptMap[expense.id] = images;
+    }
+  }
+
+  return receiptMap;
+};
+
+// ==========================================
 // HTML Template
 // ==========================================
 
@@ -110,7 +144,7 @@ const escapeHtml = (str) => {
     .replace(/"/g, '&quot;');
 };
 
-const generateHTML = (reportData, userProfile, startDate, endDate) => {
+const generateHTML = (reportData, userProfile, startDate, endDate, receiptMap = {}) => {
   const p = userProfile || {};
 
   const tripSections = reportData.tripReports
@@ -200,6 +234,27 @@ const generateHTML = (reportData, userProfile, startDate, endDate) => {
       }
 
       <div class="trip-total">Gesamtbetrag dieser Reise: <strong>${formatCurrency(tr.tripTotal)}</strong></div>
+
+      ${(() => {
+        const receiptItems = tr.expenses
+          .map((e, eIdx) => {
+            const images = receiptMap[e.id];
+            if (!images || images.length === 0) return '';
+            return images.map((dataUri, imgIdx) =>
+              `<div class="receipt-item">
+                <div class="receipt-label">Beleg ${eIdx + 1}${images.length > 1 ? String.fromCharCode(97 + imgIdx) : ''}: ${escapeHtml(getCategoryLabel(e.category))} &ndash; ${formatDate(e.date)}${e.description ? ' &ndash; ' + escapeHtml(e.description) : ''}</div>
+                <img src="${dataUri}" class="receipt-img" />
+              </div>`
+            ).join('');
+          })
+          .join('');
+        return receiptItems
+          ? `<div class="receipts-section">
+              <div class="receipts-title">Belege</div>
+              ${receiptItems}
+            </div>`
+          : '';
+      })()}
     </div>`;
     })
     .join('');
@@ -225,7 +280,7 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:9pt;color
 .period strong{color:#1565C0}
 
 /* TRIP SECTIONS */
-.trip{margin-bottom:20px;page-break-inside:avoid}
+.trip{margin-bottom:20px}
 .trip-head{background:#F5F7FA;border-left:4px solid #1565C0;padding:7px 11px;margin-bottom:6px}
 .trip-name{font-size:11pt;font-weight:700;color:#212121}
 .trip-meta{font-size:8.5pt;color:#666;margin-top:2px}
@@ -246,6 +301,13 @@ tr:nth-child(even){background:#FAFAFA}
 .section-title{font-size:10.5pt;font-weight:700;color:#1565C0;border-bottom:1px solid #1565C0;padding-bottom:3px;margin:20px 0 8px}
 .summary-table td{padding:5px 7px;font-size:9.5pt}
 .grand td{font-size:11pt;font-weight:700;color:#1565C0;border-top:3px double #1565C0;padding-top:8px}
+
+/* RECEIPTS */
+.receipts-section{margin-top:10px;page-break-before:auto}
+.receipts-title{font-size:9.5pt;font-weight:600;color:#1565C0;margin-bottom:6px;border-bottom:1px solid #1565C0;padding-bottom:3px}
+.receipt-item{margin-bottom:12px;page-break-inside:avoid}
+.receipt-label{font-size:8pt;color:#555;font-weight:600;margin-bottom:4px}
+.receipt-img{max-width:100%;max-height:500px;border:1px solid #E0E0E0;border-radius:3px}
 
 /* FOOTER */
 .footer{margin-top:36px;padding-top:12px;border-top:1px solid #E0E0E0}
@@ -327,7 +389,14 @@ export const generateReportPDF = async ({
   endDate,
 }) => {
   const reportData = buildReportData(trips, expenses);
-  const html = generateHTML(reportData, userProfile, startDate, endDate);
+
+  // Load receipt images for all relevant expenses
+  const relevantExpenses = expenses.filter((e) =>
+    trips.some((t) => t.id === e.tripId)
+  );
+  const receiptMap = await loadReceiptImages(relevantExpenses);
+
+  const html = generateHTML(reportData, userProfile, startDate, endDate, receiptMap);
 
   const { uri } = await Print.printToFileAsync({
     html,
