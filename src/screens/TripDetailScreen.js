@@ -334,7 +334,7 @@ const TripDetailScreen = ({ route, navigation }) => {
           icon="plus"
           style={styles.fab}
           color="#FFFFFF"
-          onPress={() => navigation.navigate('NeueAusgabe', { tripId: trip.id })}
+          onPress={() => navigation.navigate('NeueAusgabeStack', { tripId: trip.id })}
         />
       ) : null}
     </View>

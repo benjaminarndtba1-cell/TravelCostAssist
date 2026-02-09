@@ -27,12 +27,20 @@ import {
   loadTrips,
 } from '../utils/storage';
 
-const SettingsScreen = () => {
+const SettingsScreen = ({ navigation }) => {
+  // Company data
+  const [companyName, setCompanyName] = useState('');
+  const [companyStreet, setCompanyStreet] = useState('');
+  const [companyZipCity, setCompanyZipCity] = useState('');
+  const [companyTaxId, setCompanyTaxId] = useState('');
+
   // User profile
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [department, setDepartment] = useState('');
   const [employeeId, setEmployeeId] = useState('');
+  const [costCenter, setCostCenter] = useState('');
+  const [iban, setIban] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
 
   // Settings
@@ -52,10 +60,16 @@ const SettingsScreen = () => {
 
   const loadAllData = async () => {
     const profile = await loadUserProfile();
+    setCompanyName(profile.companyName || '');
+    setCompanyStreet(profile.companyStreet || '');
+    setCompanyZipCity(profile.companyZipCity || '');
+    setCompanyTaxId(profile.companyTaxId || '');
     setName(profile.name || '');
     setEmail(profile.email || '');
     setDepartment(profile.department || '');
     setEmployeeId(profile.employeeId || '');
+    setCostCenter(profile.costCenter || '');
+    setIban(profile.iban || '');
 
     const settings = await loadSettings();
     setCurrency(settings.currency || 'EUR');
@@ -69,10 +83,16 @@ const SettingsScreen = () => {
   const handleSaveProfile = async () => {
     setProfileSaving(true);
     const success = await saveUserProfile({
+      companyName: companyName.trim(),
+      companyStreet: companyStreet.trim(),
+      companyZipCity: companyZipCity.trim(),
+      companyTaxId: companyTaxId.trim(),
       name: name.trim(),
       email: email.trim(),
       department: department.trim(),
       employeeId: employeeId.trim(),
+      costCenter: costCenter.trim(),
+      iban: iban.trim().toUpperCase(),
     });
     setProfileSaving(false);
 
@@ -103,11 +123,7 @@ const SettingsScreen = () => {
   };
 
   const handleExportPDF = () => {
-    Alert.alert(
-      'Export',
-      'Die PDF-Export-Funktion wird in einer zukünftigen Version verfügbar sein.',
-      [{ text: 'OK' }]
-    );
+    navigation.navigate('Abrechnung');
   };
 
   const handleClearData = () => {
@@ -122,10 +138,16 @@ const SettingsScreen = () => {
           onPress: async () => {
             const success = await clearAllData();
             if (success) {
+              setCompanyName('');
+              setCompanyStreet('');
+              setCompanyZipCity('');
+              setCompanyTaxId('');
               setName('');
               setEmail('');
               setDepartment('');
               setEmployeeId('');
+              setCostCenter('');
+              setIban('');
               setCurrency('EUR');
               setTotalExpenses(0);
               setTotalTrips(0);
@@ -147,19 +169,74 @@ const SettingsScreen = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* User Profile Section */}
+        {/* Company Data Section */}
         <Surface style={styles.section} elevation={1}>
           <View style={styles.sectionHeader}>
-            <Icon source="account-circle" size={24} color={theme.colors.primary} />
+            <Icon source="office-building" size={24} color={theme.colors.primary} />
             <Text variant="titleMedium" style={styles.sectionTitle}>
-              Benutzerprofil
+              Firmendaten
             </Text>
           </View>
           <Divider style={styles.sectionDivider} />
 
           <TextInput
             mode="outlined"
-            label="Name"
+            label="Firmenname"
+            value={companyName}
+            onChangeText={setCompanyName}
+            left={<TextInput.Icon icon="domain" />}
+            style={styles.input}
+            outlineColor={theme.colors.border}
+            activeOutlineColor={theme.colors.primary}
+          />
+
+          <TextInput
+            mode="outlined"
+            label="Straße und Hausnummer"
+            value={companyStreet}
+            onChangeText={setCompanyStreet}
+            left={<TextInput.Icon icon="road-variant" />}
+            style={styles.input}
+            outlineColor={theme.colors.border}
+            activeOutlineColor={theme.colors.primary}
+          />
+
+          <TextInput
+            mode="outlined"
+            label="PLZ und Ort"
+            value={companyZipCity}
+            onChangeText={setCompanyZipCity}
+            left={<TextInput.Icon icon="map-marker" />}
+            style={styles.input}
+            outlineColor={theme.colors.border}
+            activeOutlineColor={theme.colors.primary}
+          />
+
+          <TextInput
+            mode="outlined"
+            label="Steuernummer / USt-IdNr."
+            value={companyTaxId}
+            onChangeText={setCompanyTaxId}
+            left={<TextInput.Icon icon="file-document" />}
+            style={styles.input}
+            outlineColor={theme.colors.border}
+            activeOutlineColor={theme.colors.primary}
+          />
+        </Surface>
+
+        {/* User Profile Section */}
+        <Surface style={styles.section} elevation={1}>
+          <View style={styles.sectionHeader}>
+            <Icon source="account-circle" size={24} color={theme.colors.primary} />
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              Persönliche Daten
+            </Text>
+          </View>
+          <Divider style={styles.sectionDivider} />
+
+          <TextInput
+            mode="outlined"
+            label="Vor- und Nachname"
             value={name}
             onChangeText={setName}
             left={<TextInput.Icon icon="account" />}
@@ -186,7 +263,7 @@ const SettingsScreen = () => {
             label="Abteilung"
             value={department}
             onChangeText={setDepartment}
-            left={<TextInput.Icon icon="domain" />}
+            left={<TextInput.Icon icon="account-group" />}
             style={styles.input}
             outlineColor={theme.colors.border}
             activeOutlineColor={theme.colors.primary}
@@ -203,6 +280,30 @@ const SettingsScreen = () => {
             activeOutlineColor={theme.colors.primary}
           />
 
+          <TextInput
+            mode="outlined"
+            label="Kostenstelle"
+            value={costCenter}
+            onChangeText={setCostCenter}
+            left={<TextInput.Icon icon="cash-register" />}
+            style={styles.input}
+            outlineColor={theme.colors.border}
+            activeOutlineColor={theme.colors.primary}
+          />
+
+          <TextInput
+            mode="outlined"
+            label="IBAN (für Erstattung)"
+            value={iban}
+            onChangeText={setIban}
+            autoCapitalize="characters"
+            placeholder="DE00 0000 0000 0000 0000 00"
+            left={<TextInput.Icon icon="bank" />}
+            style={styles.input}
+            outlineColor={theme.colors.border}
+            activeOutlineColor={theme.colors.primary}
+          />
+
           <Button
             mode="contained"
             onPress={handleSaveProfile}
@@ -213,7 +314,7 @@ const SettingsScreen = () => {
             textColor="#FFFFFF"
             icon="content-save"
           >
-            Profil speichern
+            Daten speichern
           </Button>
         </Surface>
 

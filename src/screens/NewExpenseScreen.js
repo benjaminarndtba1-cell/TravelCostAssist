@@ -25,7 +25,7 @@ import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { v4 as uuidv4 } from 'uuid';
 import theme from '../theme';
-import EXPENSE_CATEGORIES, { getCategoryById } from '../utils/categories';
+import EXPENSE_CATEGORIES, { getCategoryById, getPresetsForCategory } from '../utils/categories';
 import { addExpense, loadTrips } from '../utils/storage';
 import VAT_RATES, {
   getVatRateById,
@@ -38,11 +38,18 @@ import {
   KILOMETER_RATE,
 } from '../utils/distanceService';
 
-const NewExpenseScreen = ({ navigation }) => {
+const NewExpenseScreen = ({ navigation, route }) => {
+  // Check if we came from a specific trip (via stack navigation)
+  const routeTripId = route?.params?.tripId || null;
+  const fromTrip = !!routeTripId;
+
   // -- Category & trip state --
   const [category, setCategory] = useState('kilometer');
-  const [selectedTripId, setSelectedTripId] = useState(null);
+  const [selectedTripId, setSelectedTripId] = useState(routeTripId);
   const [trips, setTrips] = useState([]);
+
+  // -- Preset state --
+  const [selectedPresetId, setSelectedPresetId] = useState(null);
 
   // -- VAT state --
   const [vatRateId, setVatRateId] = useState('vat_0');
@@ -53,6 +60,7 @@ const NewExpenseScreen = ({ navigation }) => {
   // -- Kilometer mode state --
   const [startAddress, setStartAddress] = useState('');
   const [endAddress, setEndAddress] = useState('');
+  const [licensePlate, setLicensePlate] = useState('');
   const [distanceResult, setDistanceResult] = useState(null);
   const [calculatingDistance, setCalculatingDistance] = useState(false);
 
@@ -75,19 +83,21 @@ const NewExpenseScreen = ({ navigation }) => {
       const loadedTrips = await loadTrips();
       const draftTrips = loadedTrips.filter((t) => t.status === 'entwurf');
       setTrips(draftTrips);
-      if (draftTrips.length > 0) {
+      // If coming from a specific trip, keep that selection; otherwise select first
+      if (!routeTripId && draftTrips.length > 0) {
         setSelectedTripId(draftTrips[0].id);
       }
     };
     loadAvailableTrips();
-  }, []);
+  }, [routeTripId]);
 
-  // When category changes, update the default VAT rate
+  // When category changes, update the default VAT rate and reset preset
   useEffect(() => {
     const cat = getCategoryById(category);
     if (cat && cat.defaultVat) {
       setVatRateId(cat.defaultVat);
     }
+    setSelectedPresetId(null);
   }, [category]);
 
   // When distance result changes in kilometer mode, auto-calculate amount
@@ -271,6 +281,9 @@ const NewExpenseScreen = ({ navigation }) => {
       expense.endAddress = endAddress.trim();
       expense.distanceKm = distanceResult.distanceKm;
       expense.durationMinutes = distanceResult.durationMinutes;
+      if (licensePlate.trim()) {
+        expense.licensePlate = licensePlate.trim().toUpperCase();
+      }
     }
 
     const success = await addExpense(expense);
@@ -278,23 +291,53 @@ const NewExpenseScreen = ({ navigation }) => {
     setSaving(false);
 
     if (success) {
-      setSnackbarMessage('Ausgabe erfolgreich gespeichert!');
-      setSnackbarVisible(true);
+      // Reset form for potential next entry
+      const resetForm = () => {
+        setAmount('');
+        setDescription('');
+        setDate(new Date());
+        setReceiptUris([]);
+        setCategory('kilometer');
+        setSelectedPresetId(null);
+        setStartAddress('');
+        setEndAddress('');
+        setLicensePlate('');
+        setDistanceResult(null);
+      };
 
-      // Reset form
-      setAmount('');
-      setDescription('');
-      setDate(new Date());
-      setReceiptUris([]);
-      setCategory('kilometer');
-      setStartAddress('');
-      setEndAddress('');
-      setDistanceResult(null);
+      if (fromTrip) {
+        // Coming from trip detail: ask if user wants to add another position
+        Alert.alert(
+          'Position gespeichert',
+          'Möchten Sie eine weitere Position zu dieser Reise hinzufügen?',
+          [
+            {
+              text: 'Zurück zur Reise',
+              onPress: () => {
+                resetForm();
+                navigation.goBack();
+              },
+            },
+            {
+              text: 'Weitere Position',
+              onPress: () => {
+                resetForm();
+                setSnackbarMessage('Position gespeichert. Neue Position erfassen.');
+                setSnackbarVisible(true);
+              },
+            },
+          ]
+        );
+      } else {
+        setSnackbarMessage('Ausgabe erfolgreich gespeichert!');
+        setSnackbarVisible(true);
+        resetForm();
 
-      // Navigate back to dashboard after short delay
-      setTimeout(() => {
-        navigation.navigate('Übersicht');
-      }, 800);
+        // Navigate back to dashboard after short delay
+        setTimeout(() => {
+          navigation.navigate('Übersicht');
+        }, 800);
+      }
     } else {
       setSnackbarMessage(
         'Fehler beim Speichern. Bitte versuchen Sie es erneut.'
@@ -302,6 +345,25 @@ const NewExpenseScreen = ({ navigation }) => {
       setSnackbarVisible(true);
     }
   };
+
+  // -- Preset selection handler --
+  const handlePresetSelect = (preset) => {
+    if (selectedPresetId === preset.id) {
+      // Deselect: reset to category default
+      setSelectedPresetId(null);
+      const cat = getCategoryById(category);
+      if (cat && cat.defaultVat) {
+        setVatRateId(cat.defaultVat);
+      }
+      setDescription('');
+    } else {
+      setSelectedPresetId(preset.id);
+      setVatRateId(preset.vatRateId);
+      setDescription(preset.label);
+    }
+  };
+
+  const currentPresets = getPresetsForCategory(category);
 
   // -- Render helpers --
   const isKilometerMode = category === 'kilometer';
@@ -317,7 +379,16 @@ const NewExpenseScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         {/* Trip Selection */}
-        {trips.length > 0 ? (
+        {fromTrip ? (
+          <Surface style={styles.section} elevation={1}>
+            <View style={styles.tripFixedContainer}>
+              <Icon source="airplane" size={20} color={theme.colors.primary} />
+              <Text variant="bodyMedium" style={styles.tripFixedLabel}>
+                Reise: {trips.find((t) => t.id === selectedTripId)?.name || 'Wird geladen...'}
+              </Text>
+            </View>
+          </Surface>
+        ) : trips.length > 0 ? (
           <Surface style={styles.section} elevation={1}>
             <Text variant="titleSmall" style={styles.sectionTitle}>
               Reise zuordnen
@@ -415,17 +486,95 @@ const NewExpenseScreen = ({ navigation }) => {
           </Text>
         </Surface>
 
+        {/* Preset Selection (quick pick for common items) */}
+        {currentPresets.length > 0 && (
+          <Surface style={styles.section} elevation={1}>
+            <Text variant="titleSmall" style={styles.sectionTitle}>
+              Häufige Positionen
+            </Text>
+            <View style={styles.presetList}>
+              {currentPresets.map((preset) => {
+                const isSelected = selectedPresetId === preset.id;
+                const presetVatRate = getVatRateById(preset.vatRateId);
+                return (
+                  <TouchableRipple
+                    key={preset.id}
+                    onPress={() => handlePresetSelect(preset)}
+                    style={[
+                      styles.presetItem,
+                      isSelected && styles.presetItemSelected,
+                    ]}
+                  >
+                    <View style={styles.presetItemContent}>
+                      <Icon
+                        source={preset.icon}
+                        size={20}
+                        color={isSelected ? theme.colors.primary : theme.colors.textSecondary}
+                      />
+                      <View style={styles.presetItemText}>
+                        <Text
+                          variant="bodyMedium"
+                          style={[
+                            styles.presetItemLabel,
+                            isSelected && styles.presetItemLabelSelected,
+                          ]}
+                        >
+                          {preset.label}
+                        </Text>
+                        <Text variant="bodySmall" style={styles.presetItemVat}>
+                          {presetVatRate.label}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <Icon source="check-circle" size={20} color={theme.colors.primary} />
+                      )}
+                    </View>
+                  </TouchableRipple>
+                );
+              })}
+            </View>
+
+            {/* Kennzeichen-Feld bei Kilometerpauschale eigener PKW */}
+            {selectedPresetId && currentPresets.find((p) => p.id === selectedPresetId)?.hasLicensePlate && (
+              <View style={styles.licensePlateContainer}>
+                <TextInput
+                  mode="outlined"
+                  label="KFZ-Kennzeichen"
+                  value={licensePlate}
+                  onChangeText={setLicensePlate}
+                  autoCapitalize="characters"
+                  placeholder="z.B. M-AB 1234"
+                  left={<TextInput.Icon icon="car" />}
+                  style={styles.input}
+                  outlineColor={theme.colors.border}
+                  activeOutlineColor={theme.colors.primary}
+                />
+              </View>
+            )}
+          </Surface>
+        )}
+
         {/* VAT Rate Selection */}
         <Surface style={styles.section} elevation={1}>
-          <Text variant="titleSmall" style={styles.sectionTitle}>
-            Umsatzsteuersatz
-          </Text>
+          <View style={styles.vatHeader}>
+            <Text variant="titleSmall" style={[styles.sectionTitle, { marginBottom: 0 }]}>
+              Umsatzsteuersatz
+            </Text>
+            {selectedPresetId && (
+              <Text variant="bodySmall" style={styles.vatAutoHint}>
+                automatisch gesetzt
+              </Text>
+            )}
+          </View>
           <View style={styles.vatRow}>
             {VAT_RATES.map((vat) => (
               <Chip
                 key={vat.id}
                 selected={vatRateId === vat.id}
-                onPress={() => setVatRateId(vat.id)}
+                onPress={() => {
+                  setVatRateId(vat.id);
+                  setSelectedPresetId(null);
+                }}
                 style={[
                   styles.vatChip,
                   vatRateId === vat.id && styles.vatChipSelected,
@@ -736,7 +885,7 @@ const NewExpenseScreen = ({ navigation }) => {
           textColor="#FFFFFF"
           icon="content-save"
         >
-          Ausgabe speichern
+          {fromTrip ? 'Position speichern' : 'Ausgabe speichern'}
         </Button>
       </ScrollView>
 
@@ -777,6 +926,61 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '600',
     marginBottom: theme.spacing.sm + 4,
+  },
+
+  // Preset items
+  presetList: {
+    gap: theme.spacing.xs,
+  },
+  presetItem: {
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm + 4,
+    borderRadius: theme.roundness,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  presetItemSelected: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary + '08',
+  },
+  presetItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  presetItemText: {
+    flex: 1,
+    marginLeft: theme.spacing.sm + 4,
+  },
+  presetItemLabel: {
+    color: theme.colors.text,
+  },
+  presetItemLabelSelected: {
+    color: theme.colors.primary,
+    fontWeight: '600',
+  },
+  presetItemVat: {
+    color: theme.colors.textLight,
+    fontSize: 11,
+    marginTop: 1,
+  },
+  licensePlateContainer: {
+    marginTop: theme.spacing.sm + 4,
+    paddingTop: theme.spacing.sm + 4,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.divider,
+  },
+
+  // VAT header
+  vatHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.sm + 4,
+  },
+  vatAutoHint: {
+    color: theme.colors.success,
+    fontSize: 11,
+    fontWeight: '500',
   },
 
   // Category chips
@@ -980,6 +1184,16 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: theme.spacing.sm,
     color: theme.colors.textSecondary,
+  },
+  tripFixedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.spacing.xs,
+  },
+  tripFixedLabel: {
+    marginLeft: theme.spacing.sm,
+    color: theme.colors.primary,
+    fontWeight: '600',
   },
 
   // Save button

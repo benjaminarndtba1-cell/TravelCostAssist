@@ -146,10 +146,18 @@ export const saveUserProfile = async (profile) => {
 
 export const loadUserProfile = async () => {
   return loadData(STORAGE_KEYS.USER_PROFILE, {
+    // Firmendaten
+    companyName: '',
+    companyStreet: '',
+    companyZipCity: '',
+    companyTaxId: '',
+    // Personendaten
     name: '',
     email: '',
     department: '',
     employeeId: '',
+    costCenter: '',
+    iban: '',
   });
 };
 

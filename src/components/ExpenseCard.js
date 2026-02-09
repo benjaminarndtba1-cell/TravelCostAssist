@@ -65,6 +65,11 @@ const ExpenseCard = ({ expense, onPress, onLongPress }) => {
                   {vatRate.rate}% USt
                 </Text>
               ) : null}
+              {expense.licensePlate ? (
+                <Text variant="bodySmall" style={styles.licensePlateLabel}>
+                  {expense.licensePlate}
+                </Text>
+              ) : null}
             </View>
           </View>
         </View>
@@ -150,6 +155,16 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     borderRadius: 3,
     overflow: 'hidden',
+  },
+  licensePlateLabel: {
+    color: theme.colors.primary,
+    fontSize: 10,
+    backgroundColor: theme.colors.primary + '12',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    overflow: 'hidden',
+    fontWeight: '600',
   },
   rightSection: {
     alignItems: 'flex-end',

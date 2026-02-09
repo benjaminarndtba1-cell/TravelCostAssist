@@ -12,6 +12,7 @@ import NewExpenseScreen from './src/screens/NewExpenseScreen';
 import TripsScreen from './src/screens/TripsScreen';
 import TripDetailScreen from './src/screens/TripDetailScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import ReportScreen from './src/screens/ReportScreen';
 import theme from './src/theme';
 
 const Tab = createBottomTabNavigator();
@@ -129,6 +130,22 @@ export default function App() {
               component={TripDetailScreen}
               options={{
                 headerTitle: 'Reisedetails',
+                headerBackTitle: 'Zurück',
+              }}
+            />
+            <Stack.Screen
+              name="NeueAusgabeStack"
+              component={NewExpenseScreen}
+              options={{
+                headerTitle: 'Neue Position erfassen',
+                headerBackTitle: 'Zurück',
+              }}
+            />
+            <Stack.Screen
+              name="Abrechnung"
+              component={ReportScreen}
+              options={{
+                headerTitle: 'Reisekostenabrechnung',
                 headerBackTitle: 'Zurück',
               }}
             />

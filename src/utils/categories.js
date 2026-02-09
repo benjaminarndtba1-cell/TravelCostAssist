@@ -41,6 +41,53 @@ const EXPENSE_CATEGORIES = [
   },
 ];
 
+// Häufige Reisekosten-Positionen in Deutschland mit korrekten USt-Sätzen
+export const EXPENSE_PRESETS = {
+  kilometer: [
+    { id: 'km_eigener_pkw', label: 'Kilometerpauschale eigener PKW', vatRateId: 'vat_0', icon: 'car', hasLicensePlate: true },
+    { id: 'km_dienstwagen', label: 'Dienstwagen (ohne Pauschale)', vatRateId: 'vat_0', icon: 'car-estate' },
+  ],
+  fahrt: [
+    { id: 'bahn_fern', label: 'Bahnticket (Fernverkehr)', vatRateId: 'vat_7', icon: 'train' },
+    { id: 'bahn_nah', label: 'ÖPNV / Nahverkehr', vatRateId: 'vat_7', icon: 'bus' },
+    { id: 'taxi', label: 'Taxi', vatRateId: 'vat_7', icon: 'taxi' },
+    { id: 'mietwagen', label: 'Mietwagen', vatRateId: 'vat_19', icon: 'car-side' },
+    { id: 'flug_inland', label: 'Flug (Inland)', vatRateId: 'vat_19', icon: 'airplane' },
+    { id: 'flug_ausland', label: 'Flug (International)', vatRateId: 'vat_0', icon: 'airplane-takeoff' },
+    { id: 'carsharing', label: 'Carsharing', vatRateId: 'vat_19', icon: 'car-connected' },
+    { id: 'fahrt_sonstige', label: 'Sonstige Fahrtkosten', vatRateId: 'vat_19', icon: 'dots-horizontal' },
+  ],
+  uebernachtung: [
+    { id: 'hotel', label: 'Hotelübernachtung', vatRateId: 'vat_7', icon: 'bed' },
+    { id: 'hotel_fruehstueck', label: 'Hotelfrühstück', vatRateId: 'vat_19', icon: 'food-croissant' },
+    { id: 'pension', label: 'Pension / Gästehaus', vatRateId: 'vat_7', icon: 'home-variant' },
+    { id: 'ferienwohnung', label: 'Ferienwohnung', vatRateId: 'vat_7', icon: 'home-city' },
+    { id: 'uebernachtung_sonstige', label: 'Sonstige Übernachtung', vatRateId: 'vat_7', icon: 'dots-horizontal' },
+  ],
+  verpflegung: [
+    { id: 'geschaeftsessen', label: 'Geschäftsessen / Bewirtung', vatRateId: 'vat_19', icon: 'silverware-fork-knife' },
+    { id: 'mittagessen', label: 'Mittagessen', vatRateId: 'vat_19', icon: 'food' },
+    { id: 'abendessen', label: 'Abendessen', vatRateId: 'vat_19', icon: 'food-variant' },
+    { id: 'getraenke', label: 'Getränke', vatRateId: 'vat_19', icon: 'cup' },
+    { id: 'snacks', label: 'Snacks / Kleinigkeiten', vatRateId: 'vat_19', icon: 'food-apple' },
+  ],
+  sonstiges: [
+    { id: 'parkgebuehr', label: 'Parkgebühren', vatRateId: 'vat_19', icon: 'parking' },
+    { id: 'telefon', label: 'Telefon / Internet', vatRateId: 'vat_19', icon: 'cellphone' },
+    { id: 'bueromaterial', label: 'Büromaterial', vatRateId: 'vat_19', icon: 'pencil-ruler' },
+    { id: 'porto', label: 'Porto / Versand', vatRateId: 'vat_19', icon: 'email-outline' },
+    { id: 'kopien', label: 'Kopien / Druckkosten', vatRateId: 'vat_19', icon: 'printer' },
+    { id: 'trinkgeld', label: 'Trinkgeld', vatRateId: 'vat_0', icon: 'hand-coin' },
+    { id: 'gepaeck', label: 'Gepäckaufbewahrung', vatRateId: 'vat_19', icon: 'bag-suitcase' },
+    { id: 'eintritt', label: 'Eintritt / Konferenzgebühr', vatRateId: 'vat_19', icon: 'ticket-confirmation' },
+    { id: 'sonstiges_andere', label: 'Sonstige Kosten', vatRateId: 'vat_19', icon: 'dots-horizontal' },
+  ],
+};
+
+export const getPresetsForCategory = (categoryId) => {
+  return EXPENSE_PRESETS[categoryId] || [];
+};
+
 export const getCategoryById = (id) => {
   return EXPENSE_CATEGORIES.find((cat) => cat.id === id) || EXPENSE_CATEGORIES[4];
 };
