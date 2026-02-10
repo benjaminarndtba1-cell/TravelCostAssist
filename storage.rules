@@ -1,0 +1,58 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ==========================================
+    // Helper Functions
+    // ==========================================
+
+    // Prüft ob der User eingeloggt ist
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Prüft ob die Datei ein Bild ist
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    // Prüft ob die Datei unter 5MB ist
+    function isUnder5MB() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // ==========================================
+    // Receipts Storage
+    // ==========================================
+
+    match /receipts/{userId}/{expenseId}/{fileName} {
+      // User kann nur eigene Receipts lesen
+      allow read: if isAuthenticated() &&
+                     request.auth.uid == userId;
+
+      // User kann nur eigene Receipts hochladen
+      // - Muss eingeloggt sein
+      // - Muss der Owner sein (userId in Pfad)
+      // - Datei muss ein Bild sein
+      // - Datei muss unter 5MB sein
+      allow write: if isAuthenticated() &&
+                      request.auth.uid == userId &&
+                      isImage() &&
+                      isUnder5MB();
+
+      // User kann nur eigene Receipts löschen
+      allow delete: if isAuthenticated() &&
+                       request.auth.uid == userId;
+    }
+
+    // ==========================================
+    // Default: Deny All
+    // ==========================================
+
+    // Alle anderen Pfade sind standardmäßig gesperrt
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

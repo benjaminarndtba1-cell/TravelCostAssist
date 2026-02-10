@@ -1,0 +1,102 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // Helper Functions
+    // ==========================================
+
+    // Prüft ob der User eingeloggt ist
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Prüft ob der User der Owner des Dokuments ist
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Prüft ob der User der Owner des zu erstellenden Dokuments wird
+    function willBeOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ==========================================
+    // Users Collection
+    // ==========================================
+
+    match /users/{userId} {
+      // User kann nur eigenes Profil lesen und schreiben
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+    }
+
+    // ==========================================
+    // Trips Collection
+    // ==========================================
+
+    match /trips/{tripId} {
+      // User kann nur eigene Trips lesen
+      allow read: if isAuthenticated() &&
+                     resource.data.userId == request.auth.uid;
+
+      // User kann nur eigene Trips erstellen
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['name', 'destination', 'startDateTime', 'endDateTime', 'userId']);
+
+      // User kann nur eigene Trips aktualisieren
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == request.auth.uid;
+
+      // User kann nur eigene Trips löschen
+      allow delete: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
+    }
+
+    // ==========================================
+    // Expenses Collection
+    // ==========================================
+
+    match /expenses/{expenseId} {
+      // User kann nur eigene Expenses lesen
+      allow read: if isAuthenticated() &&
+                     resource.data.userId == request.auth.uid;
+
+      // User kann nur eigene Expenses erstellen
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['category', 'grossAmount', 'date', 'userId', 'tripId']);
+
+      // User kann nur eigene Expenses aktualisieren
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == request.auth.uid;
+
+      // User kann nur eigene Expenses löschen
+      allow delete: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
+    }
+
+    // ==========================================
+    // Settings Collection
+    // ==========================================
+
+    match /settings/{userId} {
+      // User kann nur eigene Settings lesen und schreiben
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+    }
+
+    // ==========================================
+    // Default: Deny All
+    // ==========================================
+
+    // Alle anderen Collections sind standardmäßig gesperrt
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

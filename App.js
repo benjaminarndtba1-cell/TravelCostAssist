@@ -1,12 +1,17 @@
 import React from 'react';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { PaperProvider } from 'react-native-paper';
+import { PaperProvider, Text } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import LoginScreen from './src/screens/LoginScreen';
+import RegisterScreen from './src/screens/RegisterScreen';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import NewExpenseScreen from './src/screens/NewExpenseScreen';
 import TripsScreen from './src/screens/TripsScreen';
@@ -108,51 +113,110 @@ function TabNavigator() {
   );
 }
 
+// Auth Stack für nicht-eingeloggte Benutzer
+function AuthStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    </Stack.Navigator>
+  );
+}
+
+// App Stack für eingeloggte Benutzer
+function AppStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle,
+        headerTintColor: '#FFFFFF',
+        headerTitleStyle,
+      }}
+    >
+      <Stack.Screen
+        name="Main"
+        component={TabNavigator}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="TripDetail"
+        component={TripDetailScreen}
+        options={{
+          headerTitle: 'Reisedetails',
+          headerBackTitle: 'Zurück',
+        }}
+      />
+      <Stack.Screen
+        name="NeueAusgabeStack"
+        component={NewExpenseScreen}
+        options={{
+          headerTitle: 'Neue Position erfassen',
+          headerBackTitle: 'Zurück',
+        }}
+      />
+      <Stack.Screen
+        name="Abrechnung"
+        component={ReportScreen}
+        options={{
+          headerTitle: 'Reisekostenabrechnung',
+          headerBackTitle: 'Zurück',
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+// Loading Screen während Auth-Check
+function LoadingScreen() {
+  return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color={theme.colors.primary} />
+      <Text style={styles.loadingText}>Lade...</Text>
+    </View>
+  );
+}
+
+// Root Navigator - entscheidet zwischen Auth und App Stack
+function RootNavigator() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  return user ? <AppStack /> : <AuthStack />;
+}
+
 export default function App() {
   return (
     <SafeAreaProvider>
       <PaperProvider theme={theme}>
-        <NavigationContainer>
-          <Stack.Navigator
-            screenOptions={{
-              headerStyle,
-              headerTintColor: '#FFFFFF',
-              headerTitleStyle,
-            }}
-          >
-            <Stack.Screen
-              name="Main"
-              component={TabNavigator}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="TripDetail"
-              component={TripDetailScreen}
-              options={{
-                headerTitle: 'Reisedetails',
-                headerBackTitle: 'Zurück',
-              }}
-            />
-            <Stack.Screen
-              name="NeueAusgabeStack"
-              component={NewExpenseScreen}
-              options={{
-                headerTitle: 'Neue Position erfassen',
-                headerBackTitle: 'Zurück',
-              }}
-            />
-            <Stack.Screen
-              name="Abrechnung"
-              component={ReportScreen}
-              options={{
-                headerTitle: 'Reisekostenabrechnung',
-                headerBackTitle: 'Zurück',
-              }}
-            />
-          </Stack.Navigator>
-        </NavigationContainer>
-        <StatusBar style="light" />
+        <AuthProvider>
+          <NavigationContainer>
+            <RootNavigator />
+          </NavigationContainer>
+          <StatusBar style="light" />
+        </AuthProvider>
       </PaperProvider>
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+});

@@ -19,6 +19,7 @@ import {
   Snackbar,
 } from 'react-native-paper';
 import theme from '../theme';
+import { useAuth } from '../context/AuthContext';
 import {
   loadUserProfile,
   saveUserProfile,
@@ -27,9 +28,11 @@ import {
   clearAllData,
   loadExpenses,
   loadTrips,
-} from '../utils/storage';
+} from '../utils/firebaseStorage';
 
 const SettingsScreen = ({ navigation }) => {
+  const { user, logout } = useAuth();
+
   // Company data
   const [companyName, setCompanyName] = useState('');
   const [companyStreet, setCompanyStreet] = useState('');
@@ -159,6 +162,28 @@ const SettingsScreen = ({ navigation }) => {
               setSnackbarMessage('Fehler beim Löschen der Daten.');
               setSnackbarVisible(true);
             }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Abmelden',
+      'Möchten Sie sich wirklich abmelden?',
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Abmelden',
+          style: 'default',
+          onPress: async () => {
+            const result = await logout();
+            if (!result.success) {
+              setSnackbarMessage(result.error || 'Fehler beim Abmelden');
+              setSnackbarVisible(true);
+            }
+            // Bei Erfolg navigiert AuthContext automatisch zum Login
           },
         },
       ]
@@ -430,6 +455,36 @@ const SettingsScreen = ({ navigation }) => {
           </Button>
         </Surface>
 
+        {/* Account Section */}
+        <Surface style={styles.section} elevation={1}>
+          <View style={styles.sectionHeader}>
+            <Icon source="account-circle" size={24} color={theme.colors.primary} />
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              Account
+            </Text>
+          </View>
+          <Divider style={styles.sectionDivider} />
+
+          <View style={styles.accountContent}>
+            <Text variant="bodyMedium" style={styles.accountEmail}>
+              Angemeldet als:
+            </Text>
+            <Text variant="titleSmall" style={styles.accountEmailValue}>
+              {user?.email || 'Unbekannt'}
+            </Text>
+          </View>
+
+          <Button
+            mode="outlined"
+            onPress={handleLogout}
+            style={styles.logoutButton}
+            textColor={theme.colors.primary}
+            icon="logout"
+          >
+            Abmelden
+          </Button>
+        </Surface>
+
         {/* About Section */}
         <Surface style={styles.section} elevation={1}>
           <View style={styles.sectionHeader}>
@@ -552,6 +607,23 @@ const styles = StyleSheet.create({
     marginHorizontal: theme.spacing.md,
     marginBottom: theme.spacing.md,
     borderColor: theme.colors.error,
+  },
+  accountContent: {
+    padding: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+  },
+  accountEmail: {
+    color: theme.colors.textSecondary,
+    marginBottom: 4,
+  },
+  accountEmailValue: {
+    color: theme.colors.text,
+    fontWeight: '600',
+  },
+  logoutButton: {
+    marginHorizontal: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    borderColor: theme.colors.primary,
   },
   aboutContent: {
     padding: theme.spacing.md,
