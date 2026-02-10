@@ -6,6 +6,8 @@ import {
   RefreshControl,
   Alert,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import {
   Text,
@@ -290,7 +292,11 @@ const TripsScreen = ({ navigation }) => {
           onDismiss={() => setModalVisible(false)}
           contentContainerStyle={styles.modalContainer}
         >
-          <ScrollView>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <ScrollView keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}>
               <Text variant="titleLarge" style={styles.modalTitle}>
                 Neue Reise erstellen
@@ -466,7 +472,8 @@ const TripsScreen = ({ navigation }) => {
                 Erstellen
               </Button>
             </View>
-          </ScrollView>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </Modal>
       </Portal>
 
