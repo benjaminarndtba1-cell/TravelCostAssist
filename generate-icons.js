@@ -1,6 +1,6 @@
 /**
  * App Icon Generator für TravelCostAssist
- * Design: Blauer Hintergrund, weißes Flugzeug (Draufsicht) + Euro-Badge
+ * Design: Blauer Hintergrund, weißes Flugzeug (MDI "airplane" Stil) + Euro-Badge
  */
 
 const { PNG } = require('pngjs');
@@ -48,8 +48,6 @@ function fillRoundedRect(png, x, y, w, h, r, c, alpha = 255) {
   for (let py = Math.floor(y); py < Math.ceil(y+h); py++) {
     for (let px = Math.floor(x); px < Math.ceil(x+w); px++) {
       let inside = true;
-      // Check corners
-      const corners = [[x+r, y+r], [x+w-r, y+r], [x+r, y+h-r], [x+w-r, y+h-r]];
       if (px < x+r && py < y+r) { inside = Math.sqrt((px-x-r)**2 + (py-y-r)**2) <= r + 0.5; }
       else if (px > x+w-r && py < y+r) { inside = Math.sqrt((px-x-w+r)**2 + (py-y-r)**2) <= r + 0.5; }
       else if (px < x+r && py > y+h-r) { inside = Math.sqrt((px-x-r)**2 + (py-y-h+r)**2) <= r + 0.5; }
@@ -59,7 +57,7 @@ function fillRoundedRect(png, x, y, w, h, r, c, alpha = 255) {
   }
 }
 
-// Fill a convex polygon defined by points [{x,y}]
+// Fill a polygon defined by points [{x,y}] using scanline
 function fillPolygon(png, points, color, alpha = 255) {
   let minY = Infinity, maxY = -Infinity;
   for (const p of points) { minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
@@ -84,70 +82,48 @@ function fillPolygon(png, points, color, alpha = 255) {
   }
 }
 
-// Draw a top-down airplane (rotated 45 degrees, flying upper-right)
-function drawTopDownAirplane(png, cx, cy, size, color) {
-  const s = size;
-  // Rotation angle: ~-30 degrees (flying upper-right)
-  const angle = -Math.PI / 6;
+/**
+ * Draw the MaterialCommunityIcons "airplane" icon.
+ * Based on the MDI SVG path for "airplane" in a 24x24 viewBox:
+ * M21,16V14L13,9V3.5A1.5,1.5,0,0,0,11.5,2A1.5,1.5,0,0,0,10,3.5V9L2,14V16L10,13.5V19.5L8,21V22.5L11.5,21.5L15,22.5V21L13,19.5V13.5Z
+ *
+ * Rotated -45° so the plane flies upper-right.
+ */
+function drawMDIAirplane(png, cx, cy, scale, color) {
+  const s = scale / 24;
+  const angle = -Math.PI / 4; // -45 degrees
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
 
-  function rot(x, y) {
-    return { x: cx + x * cos - y * sin, y: cy + x * sin + y * cos };
+  function tr(ix, iy) {
+    const lx = (ix - 12) * s;
+    const ly = (iy - 12) * s;
+    return {
+      x: cx + lx * cos - ly * sin,
+      y: cy + lx * sin + ly * cos,
+    };
   }
 
-  // Fuselage (elongated shape)
-  const fuseW = s * 0.06;
-  const fuseLen = s * 0.45;
-  const fuselage = [
-    rot(-fuseW, -fuseLen),    // top-left
-    rot(0, -fuseLen - s*0.04), // nose tip
-    rot(fuseW, -fuseLen),     // top-right
-    rot(fuseW, fuseLen * 0.7),// bottom-right
-    rot(0, fuseLen * 0.8),    // tail tip
-    rot(-fuseW, fuseLen * 0.7),// bottom-left
-  ];
-  fillPolygon(png, fuselage, color);
+  // Nose (rounded tip at top)
+  fillCircleAA(png, tr(11.5, 2).x, tr(11.5, 2).y, 1.5 * s, color);
 
-  // Main wings (swept back, wide)
-  const wingSpan = s * 0.42;
-  const wingChord = s * 0.12;
-  // Right wing
-  const rWing = [
-    rot(fuseW * 0.5, -s * 0.05),
-    rot(wingSpan, s * 0.08),
-    rot(wingSpan, s * 0.08 + wingChord * 0.4),
-    rot(fuseW * 0.5, s * 0.05 + wingChord * 0.3),
-  ];
-  fillPolygon(png, rWing, color);
+  // Fuselage body
+  fillPolygon(png, [tr(10, 3.5), tr(13, 3.5), tr(13, 19.5), tr(10, 19.5)], color);
+
   // Left wing
-  const lWing = [
-    rot(-fuseW * 0.5, -s * 0.05),
-    rot(-wingSpan, s * 0.08),
-    rot(-wingSpan, s * 0.08 + wingChord * 0.4),
-    rot(-fuseW * 0.5, s * 0.05 + wingChord * 0.3),
-  ];
-  fillPolygon(png, lWing, color);
+  fillPolygon(png, [tr(10, 9), tr(2, 14), tr(2, 16), tr(10, 13.5)], color);
 
-  // Tail wings (smaller, at the back)
-  const tailSpan = s * 0.16;
-  const tailY = fuseLen * 0.55;
-  // Right tail
-  const rTail = [
-    rot(fuseW * 0.3, tailY - s * 0.01),
-    rot(tailSpan, tailY + s * 0.04),
-    rot(tailSpan, tailY + s * 0.07),
-    rot(fuseW * 0.3, tailY + s * 0.04),
-  ];
-  fillPolygon(png, rTail, color);
-  // Left tail
-  const lTail = [
-    rot(-fuseW * 0.3, tailY - s * 0.01),
-    rot(-tailSpan, tailY + s * 0.04),
-    rot(-tailSpan, tailY + s * 0.07),
-    rot(-fuseW * 0.3, tailY + s * 0.04),
-  ];
-  fillPolygon(png, lTail, color);
+  // Right wing
+  fillPolygon(png, [tr(13, 9), tr(21, 14), tr(21, 16), tr(13, 13.5)], color);
+
+  // Left tail fin
+  fillPolygon(png, [tr(10, 19.5), tr(8, 21), tr(8, 22.5), tr(11.5, 21.5)], color);
+
+  // Right tail fin
+  fillPolygon(png, [tr(13, 19.5), tr(15, 21), tr(15, 22.5), tr(11.5, 21.5)], color);
+
+  // Tail bottom triangle (connects fuselage to tail point)
+  fillPolygon(png, [tr(10, 19.5), tr(13, 19.5), tr(11.5, 21.5)], color);
 }
 
 // Draw Euro sign using arc + bars
@@ -189,14 +165,12 @@ function generateIcon(size, outputPath, isAdaptive) {
     }
   }
 
-  const fgColor = isAdaptive ? WHITE : WHITE;
-
-  // Airplane (centered a bit above middle)
-  drawTopDownAirplane(png, cx - size * 0.02, cy - size * 0.06, size * 0.75, fgColor);
+  // Airplane (MDI style, centered slightly above middle)
+  drawMDIAirplane(png, cx - size * 0.02, cy - size * 0.04, size * 0.7, WHITE);
 
   // Euro badge (bottom-right)
-  const euroCx = cx + size * 0.2;
-  const euroCy = cy + size * 0.22;
+  const euroCx = cx + size * 0.22;
+  const euroCy = cy + size * 0.24;
   const euroR = size * 0.13;
 
   if (!isAdaptive) {
@@ -222,11 +196,11 @@ function generateSplash(size, outputPath) {
   fillCircleAA(png, cx, cy, size * 0.4, WHITE);
 
   // Airplane
-  drawTopDownAirplane(png, cx - size * 0.01, cy - size * 0.04, size * 0.6, PRIMARY);
+  drawMDIAirplane(png, cx - size * 0.01, cy - size * 0.03, size * 0.55, PRIMARY);
 
   // Euro badge
-  const euroCx = cx + size * 0.14;
-  const euroCy = cy + size * 0.17;
+  const euroCx = cx + size * 0.16;
+  const euroCy = cy + size * 0.18;
   const euroR = size * 0.09;
   fillCircleAA(png, euroCx, euroCy, euroR, PRIMARY);
   drawEuroSymbol(png, euroCx, euroCy, euroR * 1.6, WHITE);
