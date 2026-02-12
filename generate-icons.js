@@ -91,7 +91,7 @@ function fillPolygon(png, points, color, alpha = 255) {
  */
 function drawMDIAirplane(png, cx, cy, scale, color) {
   const s = scale / 24;
-  const angle = -Math.PI / 4 - Math.PI / 2; // -135 degrees (additional -90°)
+  const angle = Math.PI / 4; // 45 degrees - nose points upper-right
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
 
