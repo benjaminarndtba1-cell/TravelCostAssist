@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,19 +8,17 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  TouchableOpacity,
+  Modal,
+  Pressable,
 } from 'react-native';
 import {
   Text,
   FAB,
-  Modal,
   TextInput,
   Button,
   Icon,
   Snackbar,
   Divider,
-  List,
-  ActivityIndicator,
 } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -61,11 +59,6 @@ const TripsScreen = ({ navigation }) => {
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Address search state
-  const [addressSuggestions, setAddressSuggestions] = useState([]);
-  const [searchingAddress, setSearchingAddress] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [destinationCoordinates, setDestinationCoordinates] = useState(null);
 
   // Preview of meal allowances based on current date/time selection
   const mealAllowancePreview = useMemo(() => {
@@ -130,90 +123,6 @@ const TripsScreen = ({ navigation }) => {
     setTripEndDate(new Date());
     setTripStartTime(new Date());
     setTripEndTime(new Date());
-    setAddressSuggestions([]);
-    setShowSuggestions(false);
-    setDestinationCoordinates(null);
-  };
-
-  // Search for addresses using Nominatim API
-  const searchAddress = useCallback(async (query) => {
-    if (!query || query.trim().length < 3) {
-      setAddressSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-
-    setSearchingAddress(true);
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?` +
-        `q=${encodeURIComponent(query)}&` +
-        `format=json&` +
-        `addressdetails=1&` +
-        `limit=5&` +
-        `countrycodes=de`,
-        {
-          headers: {
-            'User-Agent': 'TravelCostAssist/1.0',
-          },
-        }
-      );
-      const data = await response.json();
-      setAddressSuggestions(data);
-      setShowSuggestions(data.length > 0);
-    } catch (error) {
-      console.error('Address search error:', error);
-      setAddressSuggestions([]);
-      setShowSuggestions(false);
-    } finally {
-      setSearchingAddress(false);
-    }
-  }, []);
-
-  // Debounced address search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (tripCompany && tripCompany.length >= 3 && showSuggestions !== false && modalVisible) {
-        searchAddress(tripCompany);
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [tripCompany, searchAddress, showSuggestions, modalVisible]);
-
-  const handleSelectAddress = (suggestion) => {
-    const { address, display_name, lat, lon } = suggestion;
-
-    // Set company name to the primary name (business, building, or first part)
-    let companyName = '';
-    if (address.business) {
-      companyName = address.business;
-    } else if (address.building) {
-      companyName = address.building;
-    } else if (address.amenity) {
-      companyName = address.amenity;
-    } else {
-      companyName = display_name.split(',')[0];
-    }
-
-    setTripCompany(companyName);
-
-    // Build destination address
-    const addressParts = [];
-    if (address.road) addressParts.push(address.road);
-    if (address.house_number) addressParts.push(address.house_number);
-    if (address.postcode) addressParts.push(address.postcode);
-    if (address.city || address.town || address.village) {
-      addressParts.push(address.city || address.town || address.village);
-    }
-
-    const destination = addressParts.join(', ') || display_name;
-    setTripDestination(destination);
-
-    // Save coordinates for distance calculation
-    setDestinationCoordinates({ latitude: parseFloat(lat), longitude: parseFloat(lon) });
-
-    setShowSuggestions(false);
-    setAddressSuggestions([]);
   };
 
   const handleCreateTrip = async () => {
@@ -245,7 +154,6 @@ const TripsScreen = ({ navigation }) => {
       destination: tripDestination.trim(),
       company: tripCompany.trim(),
       contact: tripContact.trim(),
-      destinationCoordinates: destinationCoordinates,
       startDateTime: startDateTime.toISOString(),
       endDateTime: endDateTime.toISOString(),
       status: TRIP_STATUS.DRAFT,
@@ -373,26 +281,21 @@ const TripsScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       />
 
-      <FAB
-        icon="plus"
-        style={styles.fab}
-        color="#FFFFFF"
-        onPress={() => {
-          resetForm();
-          setModalVisible(true);
-        }}
-        label="Neue Reise"
-      />
-
       {/* Create Trip Modal */}
       <Modal
         visible={modalVisible}
-        onDismiss={() => setModalVisible(false)}
-        contentContainerStyle={styles.modalContainer}
+        onRequestClose={() => setModalVisible(false)}
+        transparent={true}
+        animationType="slide"
+        statusBarTranslucent={true}
       >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setModalVisible(false)}
+        >
+          <Pressable style={styles.modalContainer} onPress={() => {}}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ flex: 1 }}
           >
             <ScrollView keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}>
@@ -431,38 +334,17 @@ const TripsScreen = ({ navigation }) => {
                 activeOutlineColor={theme.colors.primary}
               />
 
-              <View>
-                <TextInput
-                  mode="outlined"
-                  label="Firma"
-                  placeholder="z.B. Musterfirma GmbH"
-                  value={tripCompany}
-                  onChangeText={(text) => {
-                    setTripCompany(text);
-                    setShowSuggestions(true);
-                  }}
-                  onFocus={() => setShowSuggestions(true)}
-                  left={<TextInput.Icon icon="office-building" />}
-                  right={searchingAddress ? <TextInput.Icon icon={() => <ActivityIndicator size="small" />} /> : null}
-                  style={styles.modalInput}
-                  outlineColor={theme.colors.border}
-                  activeOutlineColor={theme.colors.primary}
-                />
-                {showSuggestions && addressSuggestions.length > 0 && (
-                  <View style={styles.suggestionsContainer}>
-                    {addressSuggestions.map((suggestion, index) => (
-                      <List.Item
-                        key={index}
-                        title={suggestion.display_name.split(',')[0]}
-                        description={suggestion.display_name.split(',').slice(1).join(',')}
-                        left={(props) => <List.Icon {...props} icon="map-marker" />}
-                        onPress={() => handleSelectAddress(suggestion)}
-                        style={styles.suggestionItem}
-                      />
-                    ))}
-                  </View>
-                )}
-              </View>
+              <TextInput
+                mode="outlined"
+                label="Firma"
+                placeholder="z.B. Musterfirma GmbH"
+                value={tripCompany}
+                onChangeText={setTripCompany}
+                left={<TextInput.Icon icon="office-building" />}
+                style={styles.modalInput}
+                outlineColor={theme.colors.border}
+                activeOutlineColor={theme.colors.primary}
+              />
 
               <TextInput
                 mode="outlined"
@@ -617,6 +499,8 @@ const TripsScreen = ({ navigation }) => {
             </View>
             </ScrollView>
           </KeyboardAvoidingView>
+          </Pressable>
+        </Pressable>
         </Modal>
 
       <Snackbar
@@ -630,6 +514,17 @@ const TripsScreen = ({ navigation }) => {
       >
         {snackbarMessage}
       </Snackbar>
+
+      <FAB
+        icon="plus"
+        style={styles.fab}
+        color="#FFFFFF"
+        onPress={() => {
+          resetForm();
+          setModalVisible(true);
+        }}
+        label="Neue Reise"
+      />
     </View>
   );
 };
@@ -682,9 +577,14 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     borderRadius: 28,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.md,
+  },
   modalContainer: {
     backgroundColor: theme.colors.surface,
-    marginHorizontal: theme.spacing.md,
     borderRadius: theme.roundness * 2,
     overflow: 'hidden',
     maxHeight: '85%',
@@ -765,23 +665,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     padding: theme.spacing.md,
     gap: theme.spacing.sm,
-  },
-  suggestionsContainer: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.roundness,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginTop: -theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
-    maxHeight: 200,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  suggestionItem: {
-    paddingVertical: theme.spacing.xs,
   },
 });
 
