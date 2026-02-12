@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,6 +7,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Image,
+  TouchableOpacity,
 } from 'react-native';
 import {
   Text,
@@ -23,7 +24,9 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { v4 as uuidv4 } from 'uuid';
+// Einfache ID-Generierung ohne crypto.getRandomValues() (React Native kompatibel)
+const generateId = () =>
+  Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
 import theme from '../theme';
 import EXPENSE_CATEGORIES, { getCategoryById, getPresetsForCategory } from '../utils/categories';
 import { addExpense, loadTrips } from '../utils/storage';
@@ -63,8 +66,24 @@ const NewExpenseScreen = ({ navigation, route }) => {
   const [startAddress, setStartAddress] = useState('');
   const [endAddress, setEndAddress] = useState('');
   const [licensePlate, setLicensePlate] = useState('');
+  const [tripDirection, setTripDirection] = useState('roundtrip'); // 'roundtrip' or 'oneway'
   const [distanceResult, setDistanceResult] = useState(null);
   const [calculatingDistance, setCalculatingDistance] = useState(false);
+  const [manualDistanceInput, setManualDistanceInput] = useState('');
+  const [isManualDistance, setIsManualDistance] = useState(false);
+
+  // -- Geocoding autocomplete state --
+  const [startSuggestions, setStartSuggestions] = useState([]);
+  const [endSuggestions, setEndSuggestions] = useState([]);
+  const [showStartSuggestions, setShowStartSuggestions] = useState(false);
+  const [showEndSuggestions, setShowEndSuggestions] = useState(false);
+  const [searchingStart, setSearchingStart] = useState(false);
+  const [searchingEnd, setSearchingEnd] = useState(false);
+  const startSearchTimer = useRef(null);
+  const endSearchTimer = useRef(null);
+  // Coordinates stored from selected suggestions for direct distance calc
+  const [startCoords, setStartCoords] = useState(null);
+  const [endCoords, setEndCoords] = useState(null);
 
   // -- Common fields --
   const [description, setDescription] = useState('');
@@ -103,6 +122,84 @@ const NewExpenseScreen = ({ navigation, route }) => {
     }
   }, [category, selectedTripId, trips, endAddress]);
 
+  // Debounced geocoding search for start address
+  const handleStartAddressChange = (text) => {
+    setStartAddress(text);
+    setDistanceResult(null);
+    setStartCoords(null);
+    if (startSearchTimer.current) clearTimeout(startSearchTimer.current);
+    if (text.trim().length < 3) {
+      setStartSuggestions([]);
+      setShowStartSuggestions(false);
+      setSearchingStart(false);
+      return;
+    }
+    setSearchingStart(true);
+    startSearchTimer.current = setTimeout(async () => {
+      const result = await geocodeAddress(text.trim());
+      if (result.success) {
+        setStartSuggestions(result.results);
+        setShowStartSuggestions(true);
+      } else {
+        setStartSuggestions([]);
+        setShowStartSuggestions(false);
+      }
+      setSearchingStart(false);
+    }, 800);
+  };
+
+  // Debounced geocoding search for end address
+  const handleEndAddressChange = (text) => {
+    setEndAddress(text);
+    setDistanceResult(null);
+    setEndCoords(null);
+    if (endSearchTimer.current) clearTimeout(endSearchTimer.current);
+    if (text.trim().length < 3) {
+      setEndSuggestions([]);
+      setShowEndSuggestions(false);
+      setSearchingEnd(false);
+      return;
+    }
+    setSearchingEnd(true);
+    endSearchTimer.current = setTimeout(async () => {
+      const result = await geocodeAddress(text.trim());
+      if (result.success) {
+        setEndSuggestions(result.results);
+        setShowEndSuggestions(true);
+      } else {
+        setEndSuggestions([]);
+        setShowEndSuggestions(false);
+      }
+      setSearchingEnd(false);
+    }, 800);
+  };
+
+  // Handle selecting a start address suggestion
+  const handleSelectStartSuggestion = (suggestion) => {
+    setStartAddress(suggestion.displayName);
+    setStartCoords({ lat: suggestion.lat, lon: suggestion.lon });
+    setStartSuggestions([]);
+    setShowStartSuggestions(false);
+    setDistanceResult(null);
+  };
+
+  // Handle selecting an end address suggestion
+  const handleSelectEndSuggestion = (suggestion) => {
+    setEndAddress(suggestion.displayName);
+    setEndCoords({ lat: suggestion.lat, lon: suggestion.lon });
+    setEndSuggestions([]);
+    setShowEndSuggestions(false);
+    setDistanceResult(null);
+  };
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (startSearchTimer.current) clearTimeout(startSearchTimer.current);
+      if (endSearchTimer.current) clearTimeout(endSearchTimer.current);
+    };
+  }, []);
+
   // When category changes, update the default VAT rate and reset preset
   useEffect(() => {
     const cat = getCategoryById(category);
@@ -112,13 +209,33 @@ const NewExpenseScreen = ({ navigation, route }) => {
     setSelectedPresetId(null);
   }, [category]);
 
-  // When distance result changes in kilometer mode, auto-calculate amount
+  // When distance result or direction changes in kilometer mode, auto-calculate amount
   useEffect(() => {
     if (category === 'kilometer' && distanceResult) {
-      const cost = calculateMileageCost(distanceResult.distanceKm);
+      const multiplier = tripDirection === 'roundtrip' ? 2 : 1;
+      const totalKm = distanceResult.distanceKm * multiplier;
+      const cost = calculateMileageCost(totalKm);
       setAmount(cost.toFixed(2).replace('.', ','));
     }
-  }, [distanceResult, category]);
+  }, [distanceResult, category, tripDirection]);
+
+  // Handle manual distance input
+  const handleManualDistanceChange = (text) => {
+    setManualDistanceInput(text);
+    const km = parseFloat(text.replace(',', '.'));
+    if (!isNaN(km) && km > 0) {
+      setDistanceResult({
+        distanceKm: km,
+        durationMinutes: 0,
+        distanceText: `${km.toFixed(1).replace('.', ',')} km`,
+        durationText: '',
+      });
+      setIsManualDistance(true);
+    } else {
+      setDistanceResult(null);
+      setIsManualDistance(false);
+    }
+  };
 
   // -- Helpers --
   const parseAmount = (text) => {
@@ -155,40 +272,68 @@ const NewExpenseScreen = ({ navigation, route }) => {
 
     setCalculatingDistance(true);
     setDistanceResult(null);
+    setIsManualDistance(false);
+    setManualDistanceInput('');
 
-    // Check if we can use stored coordinates from the trip for faster calculation
-    const selectedTrip = trips.find((t) => t.id === selectedTripId);
     let result;
 
-    if (selectedTrip && selectedTrip.destinationCoordinates &&
-        endAddress.trim() === selectedTrip.destination) {
-      // Use stored coordinates for destination - faster and more accurate!
-      const startGeocode = await geocodeAddress(startAddress.trim());
+    if (startCoords && endCoords) {
+      // Both addresses were selected from suggestions - use stored coordinates directly
+      const distanceCalc = await calculateDistance(
+        startCoords.lat, startCoords.lon,
+        endCoords.lat, endCoords.lon
+      );
 
-      if (startGeocode.success && startGeocode.results.length > 0) {
-        const start = startGeocode.results[0];
-        const dest = selectedTrip.destinationCoordinates;
-
+      if (distanceCalc.success) {
+        result = {
+          success: true,
+          start: { address: startAddress, ...startCoords },
+          end: { address: endAddress, ...endCoords },
+          distanceKm: distanceCalc.distanceKm,
+          durationMinutes: distanceCalc.durationMinutes,
+          distanceText: distanceCalc.distanceText,
+          durationText: distanceCalc.durationText,
+        };
+      } else {
+        result = distanceCalc;
+      }
+    } else if (startCoords) {
+      // Only start from suggestion, geocode end
+      const endGeocode = await geocodeAddress(endAddress.trim());
+      if (endGeocode.success && endGeocode.results.length > 0) {
+        const end = endGeocode.results[0];
         const distanceCalc = await calculateDistance(
-          start.lat,
-          start.lon,
-          dest.latitude,
-          dest.longitude
+          startCoords.lat, startCoords.lon, end.lat, end.lon
         );
-
         if (distanceCalc.success) {
           result = {
             success: true,
-            start: {
-              address: start.displayName,
-              lat: start.lat,
-              lon: start.lon,
-            },
-            end: {
-              address: selectedTrip.destination,
-              lat: dest.latitude,
-              lon: dest.longitude,
-            },
+            start: { address: startAddress, ...startCoords },
+            end: { address: end.displayName, lat: end.lat, lon: end.lon },
+            distanceKm: distanceCalc.distanceKm,
+            durationMinutes: distanceCalc.durationMinutes,
+            distanceText: distanceCalc.distanceText,
+            durationText: distanceCalc.durationText,
+          };
+        } else {
+          result = distanceCalc;
+        }
+      } else {
+        result = endGeocode;
+      }
+    } else if (endCoords) {
+      // Only end from suggestion, geocode start
+      const startGeocode = await geocodeAddress(startAddress.trim());
+      if (startGeocode.success && startGeocode.results.length > 0) {
+        const start = startGeocode.results[0];
+        const distanceCalc = await calculateDistance(
+          start.lat, start.lon, endCoords.lat, endCoords.lon
+        );
+        if (distanceCalc.success) {
+          result = {
+            success: true,
+            start: { address: start.displayName, lat: start.lat, lon: start.lon },
+            end: { address: endAddress, ...endCoords },
             distanceKm: distanceCalc.distanceKm,
             durationMinutes: distanceCalc.durationMinutes,
             distanceText: distanceCalc.distanceText,
@@ -278,18 +423,20 @@ const NewExpenseScreen = ({ navigation, route }) => {
   // -- Validation --
   const validateForm = () => {
     if (category === 'kilometer') {
-      if (!startAddress.trim()) {
-        setSnackbarMessage('Bitte geben Sie eine Startadresse ein.');
-        setSnackbarVisible(true);
-        return false;
-      }
-      if (!endAddress.trim()) {
-        setSnackbarMessage('Bitte geben Sie eine Zieladresse ein.');
-        setSnackbarVisible(true);
-        return false;
+      if (!isManualDistance) {
+        if (!startAddress.trim()) {
+          setSnackbarMessage('Bitte geben Sie eine Startadresse ein.');
+          setSnackbarVisible(true);
+          return false;
+        }
+        if (!endAddress.trim()) {
+          setSnackbarMessage('Bitte geben Sie eine Zieladresse ein.');
+          setSnackbarVisible(true);
+          return false;
+        }
       }
       if (!distanceResult) {
-        setSnackbarMessage('Bitte berechnen Sie zuerst die Entfernung.');
+        setSnackbarMessage('Bitte berechnen Sie die Entfernung oder geben Sie sie manuell ein.');
         setSnackbarVisible(true);
         return false;
       }
@@ -319,7 +466,7 @@ const NewExpenseScreen = ({ navigation, route }) => {
     setSaving(true);
 
     const expense = {
-      id: uuidv4(),
+      id: generateId(),
       category,
       grossAmount: grossAmount,
       netAmount: Math.round(netAmount * 100) / 100,
@@ -336,10 +483,14 @@ const NewExpenseScreen = ({ navigation, route }) => {
 
     // Add kilometer-specific fields
     if (category === 'kilometer' && distanceResult) {
+      const multiplier = tripDirection === 'roundtrip' ? 2 : 1;
       expense.startAddress = startAddress.trim();
       expense.endAddress = endAddress.trim();
-      expense.distanceKm = distanceResult.distanceKm;
-      expense.durationMinutes = distanceResult.durationMinutes;
+      expense.distanceKm = distanceResult.distanceKm * multiplier;
+      expense.distanceKmOneWay = distanceResult.distanceKm;
+      expense.durationMinutes = distanceResult.durationMinutes * multiplier;
+      expense.tripDirection = tripDirection;
+      expense.isManualDistance = isManualDistance;
       if (licensePlate.trim()) {
         expense.licensePlate = licensePlate.trim().toUpperCase();
       }
@@ -361,7 +512,14 @@ const NewExpenseScreen = ({ navigation, route }) => {
         setStartAddress('');
         setEndAddress('');
         setLicensePlate('');
+        setTripDirection('roundtrip');
         setDistanceResult(null);
+        setManualDistanceInput('');
+        setIsManualDistance(false);
+        setStartCoords(null);
+        setEndCoords(null);
+        setStartSuggestions([]);
+        setEndSuggestions([]);
       };
 
       if (fromTrip) {
@@ -664,33 +822,65 @@ const NewExpenseScreen = ({ navigation, route }) => {
             <Text variant="titleSmall" style={styles.sectionTitle}>
               Kilometerabrechnung
             </Text>
-            <TextInput
-              mode="outlined"
-              label="Startadresse"
-              value={startAddress}
-              onChangeText={(text) => {
-                setStartAddress(text);
-                setDistanceResult(null);
-              }}
-              left={<TextInput.Icon icon="map-marker" />}
-              style={styles.input}
-              outlineColor={theme.colors.border}
-              activeOutlineColor={theme.colors.primary}
-            />
+            <View>
+              <TextInput
+                mode="outlined"
+                label="Startadresse"
+                value={startAddress}
+                onChangeText={handleStartAddressChange}
+                left={<TextInput.Icon icon="map-marker" />}
+                right={searchingStart ? <TextInput.Icon icon="loading" /> : startCoords ? <TextInput.Icon icon="check-circle" color={theme.colors.success} /> : null}
+                style={styles.input}
+                outlineColor={startCoords ? theme.colors.success : theme.colors.border}
+                activeOutlineColor={theme.colors.primary}
+              />
+              {showStartSuggestions && startSuggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                  {startSuggestions.map((item, index) => (
+                    <TouchableOpacity
+                      key={`start-${index}`}
+                      style={styles.suggestionItem}
+                      onPress={() => handleSelectStartSuggestion(item)}
+                    >
+                      <Icon source="map-marker" size={16} color={theme.colors.primary} />
+                      <Text variant="bodySmall" style={styles.suggestionText} numberOfLines={2}>
+                        {item.displayName}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
             <View style={styles.spacerSm} />
-            <TextInput
-              mode="outlined"
-              label="Zieladresse"
-              value={endAddress}
-              onChangeText={(text) => {
-                setEndAddress(text);
-                setDistanceResult(null);
-              }}
-              left={<TextInput.Icon icon="map-marker-check" />}
-              style={styles.input}
-              outlineColor={theme.colors.border}
-              activeOutlineColor={theme.colors.primary}
-            />
+            <View>
+              <TextInput
+                mode="outlined"
+                label="Zieladresse"
+                value={endAddress}
+                onChangeText={handleEndAddressChange}
+                left={<TextInput.Icon icon="map-marker-check" />}
+                right={searchingEnd ? <TextInput.Icon icon="loading" /> : endCoords ? <TextInput.Icon icon="check-circle" color={theme.colors.success} /> : null}
+                style={styles.input}
+                outlineColor={endCoords ? theme.colors.success : theme.colors.border}
+                activeOutlineColor={theme.colors.primary}
+              />
+              {showEndSuggestions && endSuggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                  {endSuggestions.map((item, index) => (
+                    <TouchableOpacity
+                      key={`end-${index}`}
+                      style={styles.suggestionItem}
+                      onPress={() => handleSelectEndSuggestion(item)}
+                    >
+                      <Icon source="map-marker-check" size={16} color={theme.colors.primary} />
+                      <Text variant="bodySmall" style={styles.suggestionText} numberOfLines={2}>
+                        {item.displayName}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
             <View style={styles.spacerMd} />
             <Button
               mode="contained"
@@ -704,6 +894,71 @@ const NewExpenseScreen = ({ navigation, route }) => {
             >
               Entfernung berechnen
             </Button>
+
+            {/* Manuelle Entfernungseingabe */}
+            <View style={styles.manualDivider}>
+              <View style={styles.manualDividerLine} />
+              <Text variant="bodySmall" style={styles.manualDividerText}>oder</Text>
+              <View style={styles.manualDividerLine} />
+            </View>
+            <TextInput
+              mode="outlined"
+              label="Entfernung manuell eingeben (km)"
+              value={manualDistanceInput}
+              onChangeText={handleManualDistanceChange}
+              keyboardType="decimal-pad"
+              right={<TextInput.Affix text="km" />}
+              left={<TextInput.Icon icon="pencil-ruler" />}
+              style={styles.input}
+              outlineColor={isManualDistance ? theme.colors.warning : theme.colors.border}
+              activeOutlineColor={theme.colors.warning}
+            />
+            {isManualDistance && (
+              <View style={styles.manualHintRow}>
+                <Icon source="alert-circle-outline" size={14} color={theme.colors.warning} />
+                <Text variant="bodySmall" style={styles.manualHintText}>
+                  Manuelle Eingabe - Entfernung nicht automatisch ermittelt
+                </Text>
+              </View>
+            )}
+
+            {/* Hin-/Rückfahrt Auswahl */}
+            <View style={styles.directionRow}>
+              <Chip
+                icon="swap-horizontal"
+                selected={tripDirection === 'roundtrip'}
+                onPress={() => setTripDirection('roundtrip')}
+                style={[
+                  styles.directionChip,
+                  tripDirection === 'roundtrip' && styles.directionChipSelected,
+                ]}
+                textStyle={[
+                  styles.directionChipText,
+                  tripDirection === 'roundtrip' && styles.directionChipTextSelected,
+                ]}
+                selectedColor={tripDirection === 'roundtrip' ? '#FFFFFF' : theme.colors.text}
+                showSelectedOverlay={false}
+              >
+                Hin- und Rückfahrt
+              </Chip>
+              <Chip
+                icon="arrow-right"
+                selected={tripDirection === 'oneway'}
+                onPress={() => setTripDirection('oneway')}
+                style={[
+                  styles.directionChip,
+                  tripDirection === 'oneway' && styles.directionChipSelected,
+                ]}
+                textStyle={[
+                  styles.directionChipText,
+                  tripDirection === 'oneway' && styles.directionChipTextSelected,
+                ]}
+                selectedColor={tripDirection === 'oneway' ? '#FFFFFF' : theme.colors.text}
+                showSelectedOverlay={false}
+              >
+                Nur Hinfahrt
+              </Chip>
+            </View>
 
             {calculatingDistance && (
               <View style={styles.loadingContainer}>
@@ -720,6 +975,14 @@ const NewExpenseScreen = ({ navigation, route }) => {
 
             {distanceResult && (
               <View style={styles.distanceResultContainer}>
+                {isManualDistance && (
+                  <View style={styles.manualBadgeRow}>
+                    <Icon source="pencil" size={14} color={theme.colors.warning} />
+                    <Text variant="bodySmall" style={styles.manualBadgeText}>
+                      Manuell eingegeben
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.distanceRow}>
                   <Icon
                     source="road-variant"
@@ -728,18 +991,22 @@ const NewExpenseScreen = ({ navigation, route }) => {
                   />
                   <Text variant="bodyMedium" style={styles.distanceText}>
                     Entfernung: {distanceResult.distanceText}
+                    {tripDirection === 'roundtrip' ? ' (× 2 = ' + (distanceResult.distanceKm * 2).toFixed(1).replace('.', ',') + ' km)' : ''}
                   </Text>
                 </View>
-                <View style={styles.distanceRow}>
-                  <Icon
-                    source="clock-outline"
-                    size={20}
-                    color={theme.colors.primary}
-                  />
-                  <Text variant="bodyMedium" style={styles.distanceText}>
-                    Fahrzeit: {distanceResult.durationText}
-                  </Text>
-                </View>
+                {!isManualDistance && distanceResult.durationText ? (
+                  <View style={styles.distanceRow}>
+                    <Icon
+                      source="clock-outline"
+                      size={20}
+                      color={theme.colors.primary}
+                    />
+                    <Text variant="bodyMedium" style={styles.distanceText}>
+                      Fahrzeit: {distanceResult.durationText}
+                      {tripDirection === 'roundtrip' ? ' (× 2)' : ''}
+                    </Text>
+                  </View>
+                ) : null}
                 <View style={styles.distanceRow}>
                   <Icon
                     source="cash"
@@ -1121,6 +1388,99 @@ const styles = StyleSheet.create({
   },
   spacerMd: {
     height: theme.spacing.md,
+  },
+
+  // Manual distance entry
+  manualDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: theme.spacing.sm + 4,
+  },
+  manualDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: theme.colors.divider,
+  },
+  manualDividerText: {
+    color: theme.colors.textLight,
+    marginHorizontal: theme.spacing.sm + 4,
+  },
+  manualHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: theme.spacing.xs,
+  },
+  manualHintText: {
+    color: theme.colors.warning,
+    marginLeft: theme.spacing.xs,
+    fontSize: 11,
+  },
+  manualBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.xs,
+    paddingVertical: 2,
+    paddingHorizontal: theme.spacing.xs,
+    backgroundColor: theme.colors.warning + '15',
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  manualBadgeText: {
+    color: theme.colors.warning,
+    marginLeft: theme.spacing.xs,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  // Direction selection (Hin-/Rückfahrt)
+  directionRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.xs + 2,
+    marginTop: theme.spacing.md,
+  },
+  directionChip: {
+    flex: 1,
+    backgroundColor: theme.colors.surfaceVariant,
+  },
+  directionChipSelected: {
+    backgroundColor: theme.colors.primary,
+  },
+  directionChipText: {
+    color: theme.colors.text,
+    fontSize: 12,
+  },
+  directionChipTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  // Geocoding suggestions
+  suggestionsContainer: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: theme.roundness,
+    borderBottomRightRadius: theme.roundness,
+    maxHeight: 200,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm + 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.divider,
+  },
+  suggestionText: {
+    flex: 1,
+    marginLeft: theme.spacing.sm,
+    color: theme.colors.text,
+    fontSize: 12,
   },
 
   // Distance calculation

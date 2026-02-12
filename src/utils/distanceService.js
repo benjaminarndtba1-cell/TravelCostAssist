@@ -1,39 +1,59 @@
-// Entfernungsberechnung über OpenStreetMap (Nominatim + OSRM)
-// Kostenlose APIs, keine API-Keys erforderlich
+// Entfernungsberechnung über Google Maps APIs
+// Benötigt: Geocoding API, Directions API aktiviert in Google Cloud Console
 
-const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
-const OSRM_BASE = 'https://router.project-osrm.org';
+import MAP_CONFIG from '../config/mapConfig';
 
-// Adresse zu Koordinaten (Geocoding)
+const GOOGLE_BASE = 'https://maps.googleapis.com/maps/api';
+
+const getApiKey = () => {
+  const key = MAP_CONFIG.GOOGLE_MAPS_API_KEY;
+  if (!key || key === 'DEIN_API_KEY_HIER') {
+    throw new Error(
+      'Google Maps API-Key nicht konfiguriert. Bitte in src/config/mapConfig.js eintragen.'
+    );
+  }
+  return key;
+};
+
+// Adresse zu Koordinaten (Google Geocoding API)
 export const geocodeAddress = async (address) => {
   try {
+    const apiKey = getApiKey();
     const encodedAddress = encodeURIComponent(address);
     const response = await fetch(
-      `${NOMINATIM_BASE}/search?format=json&q=${encodedAddress}&countrycodes=de&limit=5`,
-      {
-        headers: {
-          'User-Agent': 'TravelCostAssist/1.0',
-        },
-      }
+      `${GOOGLE_BASE}/geocode/json?address=${encodedAddress}&language=de&region=de&key=${apiKey}`
     );
 
     if (!response.ok) {
       throw new Error(`Geocoding fehlgeschlagen: ${response.status}`);
     }
 
-    const results = await response.json();
+    const data = await response.json();
 
-    if (results.length === 0) {
+    if (data.status === 'ZERO_RESULTS' || !data.results || data.results.length === 0) {
       return { success: false, error: 'Adresse nicht gefunden' };
+    }
+
+    if (data.status === 'REQUEST_DENIED') {
+      return { success: false, error: 'API-Key ungültig oder Geocoding API nicht aktiviert.' };
+    }
+
+    if (data.status === 'OVER_QUERY_LIMIT') {
+      return { success: false, error: 'API-Kontingent überschritten.' };
+    }
+
+    if (data.status !== 'OK') {
+      return { success: false, error: `Google Maps Fehler: ${data.status}` };
     }
 
     return {
       success: true,
-      results: results.map((r) => ({
-        displayName: r.display_name,
-        lat: parseFloat(r.lat),
-        lon: parseFloat(r.lon),
-        type: r.type,
+      results: data.results.map((r) => ({
+        displayName: r.formatted_address,
+        lat: r.geometry.location.lat,
+        lon: r.geometry.location.lng,
+        type: r.types?.[0] || 'address',
+        placeId: r.place_id,
       })),
     };
   } catch (error) {
@@ -42,16 +62,12 @@ export const geocodeAddress = async (address) => {
   }
 };
 
-// Entfernung zwischen zwei Koordinaten berechnen (OSRM Routing)
+// Entfernung zwischen zwei Koordinaten berechnen (Google Directions API)
 export const calculateDistance = async (startLat, startLon, endLat, endLon) => {
   try {
+    const apiKey = getApiKey();
     const response = await fetch(
-      `${OSRM_BASE}/route/v1/driving/${startLon},${startLat};${endLon},${endLat}?overview=false`,
-      {
-        headers: {
-          'User-Agent': 'TravelCostAssist/1.0',
-        },
-      }
+      `${GOOGLE_BASE}/directions/json?origin=${startLat},${startLon}&destination=${endLat},${endLon}&mode=driving&language=de&key=${apiKey}`
     );
 
     if (!response.ok) {
@@ -60,13 +76,22 @@ export const calculateDistance = async (startLat, startLon, endLat, endLon) => {
 
     const data = await response.json();
 
-    if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+    if (data.status === 'ZERO_RESULTS' || !data.routes || data.routes.length === 0) {
       return { success: false, error: 'Keine Route gefunden' };
     }
 
+    if (data.status === 'REQUEST_DENIED') {
+      return { success: false, error: 'API-Key ungültig oder Directions API nicht aktiviert.' };
+    }
+
+    if (data.status !== 'OK') {
+      return { success: false, error: `Google Maps Fehler: ${data.status}` };
+    }
+
     const route = data.routes[0];
-    const distanceKm = route.distance / 1000;
-    const durationMinutes = route.duration / 60;
+    const leg = route.legs[0];
+    const distanceKm = leg.distance.value / 1000;
+    const durationMinutes = leg.duration.value / 60;
 
     return {
       success: true,

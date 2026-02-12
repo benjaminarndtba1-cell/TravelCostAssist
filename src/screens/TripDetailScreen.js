@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     margin: theme.spacing.md,
     right: 0,
-    bottom: 0,
+    bottom: 16,
     backgroundColor: theme.colors.primary,
     borderRadius: 28,
   },

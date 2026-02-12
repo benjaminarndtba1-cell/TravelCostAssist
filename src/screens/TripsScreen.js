@@ -24,7 +24,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { v4 as uuidv4 } from 'uuid';
+// Einfache ID-Generierung ohne crypto.getRandomValues() (React Native kompatibel)
+const generateId = () =>
+  Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
 import theme from '../theme';
 import { loadTrips, addTrip, deleteTrip, loadExpenses } from '../utils/storage';
 import { TRIP_STATUS } from '../utils/categories';
@@ -127,8 +129,7 @@ const TripsScreen = ({ navigation }) => {
 
   const handleCreateTrip = async () => {
     if (!tripName.trim()) {
-      setSnackbarMessage('Bitte geben Sie einen Reisenamen ein.');
-      setSnackbarVisible(true);
+      Alert.alert('Fehlende Eingabe', 'Bitte geben Sie einen Reisenamen ein.');
       return;
     }
 
@@ -136,44 +137,48 @@ const TripsScreen = ({ navigation }) => {
     const endDateTime = combineDateAndTime(tripEndDate, tripEndTime);
 
     if (endDateTime <= startDateTime) {
-      setSnackbarMessage('Das Reiseende muss nach dem Reisebeginn liegen.');
-      setSnackbarVisible(true);
+      Alert.alert('Ungültige Zeiten', 'Das Reiseende muss nach dem Reisebeginn liegen.');
       return;
     }
 
     setSaving(true);
 
-    const mealAllowances = calculateMealAllowances(
-      startDateTime.toISOString(),
-      endDateTime.toISOString()
-    );
+    try {
+      const mealAllowances = calculateMealAllowances(
+        startDateTime.toISOString(),
+        endDateTime.toISOString()
+      );
 
-    const newTrip = {
-      id: uuidv4(),
-      name: tripName.trim(),
-      destination: tripDestination.trim(),
-      company: tripCompany.trim(),
-      contact: tripContact.trim(),
-      startDateTime: startDateTime.toISOString(),
-      endDateTime: endDateTime.toISOString(),
-      status: TRIP_STATUS.DRAFT,
-      currency: 'EUR',
-      mealAllowances,
-      createdAt: new Date().toISOString(),
-    };
+      const newTrip = {
+        id: generateId(),
+        name: tripName.trim(),
+        destination: tripDestination.trim(),
+        company: tripCompany.trim(),
+        contact: tripContact.trim(),
+        startDateTime: startDateTime.toISOString(),
+        endDateTime: endDateTime.toISOString(),
+        status: TRIP_STATUS.DRAFT,
+        currency: 'EUR',
+        mealAllowances,
+        createdAt: new Date().toISOString(),
+      };
 
-    const success = await addTrip(newTrip);
-    setSaving(false);
+      const success = await addTrip(newTrip);
 
-    if (success) {
-      setModalVisible(false);
-      resetForm();
-      setSnackbarMessage('Reise erfolgreich erstellt!');
-      setSnackbarVisible(true);
-      await loadData();
-    } else {
-      setSnackbarMessage('Fehler beim Erstellen der Reise.');
-      setSnackbarVisible(true);
+      if (success) {
+        setModalVisible(false);
+        resetForm();
+        setSnackbarMessage('Reise erfolgreich erstellt!');
+        setSnackbarVisible(true);
+        await loadData();
+      } else {
+        Alert.alert('Fehler', 'Fehler beim Erstellen der Reise.');
+      }
+    } catch (error) {
+      console.error('Fehler beim Erstellen der Reise:', error);
+      Alert.alert('Fehler', `Reise konnte nicht erstellt werden: ${error.message}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -289,11 +294,12 @@ const TripsScreen = ({ navigation }) => {
         animationType="slide"
         statusBarTranslucent={true}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setModalVisible(false)}
-        >
-          <Pressable style={styles.modalContainer} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setModalVisible(false)}
+          />
+          <View style={styles.modalContainer}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
@@ -499,8 +505,8 @@ const TripsScreen = ({ navigation }) => {
             </View>
             </ScrollView>
           </KeyboardAvoidingView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
         </Modal>
 
       <Snackbar
@@ -573,7 +579,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     margin: theme.spacing.md,
     right: 0,
-    bottom: 0,
+    bottom: 16,
     backgroundColor: theme.colors.primary,
     borderRadius: 28,
   },
