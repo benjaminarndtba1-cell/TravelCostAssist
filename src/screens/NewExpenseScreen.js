@@ -132,16 +132,6 @@ const NewExpenseScreen = ({ navigation, route }) => {
     loadAvailableTrips();
   }, [routeTripId]);
 
-  // Auto-fill destination from trip when in kilometer mode
-  useEffect(() => {
-    if (category === 'kilometer' && selectedTripId && !endAddress) {
-      const selectedTrip = trips.find((t) => t.id === selectedTripId);
-      if (selectedTrip && selectedTrip.destination) {
-        setEndAddress(selectedTrip.destination);
-      }
-    }
-  }, [category, selectedTripId, trips, endAddress]);
-
   // Debounced geocoding search for start address
   const handleStartAddressChange = (text) => {
     setStartAddress(text);
