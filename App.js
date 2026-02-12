@@ -5,8 +5,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { PaperProvider, Text } from 'react-native-paper';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
@@ -26,7 +26,7 @@ const Stack = createStackNavigator();
 const TAB_ICONS = {
   'Übersicht': { focused: 'view-dashboard', unfocused: 'view-dashboard-outline' },
   'NeueAusgabe': { focused: 'plus-circle', unfocused: 'plus-circle-outline' },
-  'Reisen': { focused: 'airplane', unfocused: 'airplane-outline' },
+  'Reisen': { focused: 'airplane', unfocused: 'airplane' },
   'Einstellungen': { focused: 'cog', unfocused: 'cog-outline' },
 };
 
@@ -45,13 +45,15 @@ const headerTitleStyle = {
 };
 
 function TabNavigator() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           const icons = TAB_ICONS[route.name];
           const iconName = focused ? icons.focused : icons.unfocused;
-          return <Icon name={iconName} size={size} color={color} />;
+          return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textLight,
@@ -59,8 +61,8 @@ function TabNavigator() {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.divider,
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom + 8,
           paddingTop: 4,
           elevation: 8,
           shadowColor: '#000',
@@ -200,7 +202,7 @@ export default function App() {
           <NavigationContainer>
             <RootNavigator />
           </NavigationContainer>
-          <StatusBar style="light" />
+          <StatusBar style="auto" translucent={false} />
         </AuthProvider>
       </PaperProvider>
     </SafeAreaProvider>

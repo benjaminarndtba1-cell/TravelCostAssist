@@ -34,6 +34,8 @@ import VAT_RATES, {
 } from '../utils/vatRates';
 import {
   calculateDistanceBetweenAddresses,
+  geocodeAddress,
+  calculateDistance,
   calculateMileageCost,
   KILOMETER_RATE,
 } from '../utils/distanceService';
@@ -91,6 +93,16 @@ const NewExpenseScreen = ({ navigation, route }) => {
     loadAvailableTrips();
   }, [routeTripId]);
 
+  // Auto-fill destination from trip when in kilometer mode
+  useEffect(() => {
+    if (category === 'kilometer' && selectedTripId && !endAddress) {
+      const selectedTrip = trips.find((t) => t.id === selectedTripId);
+      if (selectedTrip && selectedTrip.destination) {
+        setEndAddress(selectedTrip.destination);
+      }
+    }
+  }, [category, selectedTripId, trips, endAddress]);
+
   // When category changes, update the default VAT rate and reset preset
   useEffect(() => {
     const cat = getCategoryById(category);
@@ -144,10 +156,57 @@ const NewExpenseScreen = ({ navigation, route }) => {
     setCalculatingDistance(true);
     setDistanceResult(null);
 
-    const result = await calculateDistanceBetweenAddresses(
-      startAddress.trim(),
-      endAddress.trim()
-    );
+    // Check if we can use stored coordinates from the trip for faster calculation
+    const selectedTrip = trips.find((t) => t.id === selectedTripId);
+    let result;
+
+    if (selectedTrip && selectedTrip.destinationCoordinates &&
+        endAddress.trim() === selectedTrip.destination) {
+      // Use stored coordinates for destination - faster and more accurate!
+      const startGeocode = await geocodeAddress(startAddress.trim());
+
+      if (startGeocode.success && startGeocode.results.length > 0) {
+        const start = startGeocode.results[0];
+        const dest = selectedTrip.destinationCoordinates;
+
+        const distanceCalc = await calculateDistance(
+          start.lat,
+          start.lon,
+          dest.latitude,
+          dest.longitude
+        );
+
+        if (distanceCalc.success) {
+          result = {
+            success: true,
+            start: {
+              address: start.displayName,
+              lat: start.lat,
+              lon: start.lon,
+            },
+            end: {
+              address: selectedTrip.destination,
+              lat: dest.latitude,
+              lon: dest.longitude,
+            },
+            distanceKm: distanceCalc.distanceKm,
+            durationMinutes: distanceCalc.durationMinutes,
+            distanceText: distanceCalc.distanceText,
+            durationText: distanceCalc.durationText,
+          };
+        } else {
+          result = distanceCalc;
+        }
+      } else {
+        result = startGeocode;
+      }
+    } else {
+      // Fallback: geocode both addresses
+      result = await calculateDistanceBetweenAddresses(
+        startAddress.trim(),
+        endAddress.trim()
+      );
+    }
 
     setCalculatingDistance(false);
 
