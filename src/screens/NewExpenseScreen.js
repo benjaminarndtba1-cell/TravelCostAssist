@@ -29,7 +29,7 @@ const generateId = () =>
   Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
 import theme from '../theme';
 import EXPENSE_CATEGORIES, { getCategoryById, getPresetsForCategory } from '../utils/categories';
-import { addExpense, loadTrips } from '../utils/storage';
+import { addExpense, updateExpense, loadTrips } from '../utils/storage';
 import VAT_RATES, {
   getVatRateById,
   calculateNetAmount,
@@ -48,29 +48,46 @@ const NewExpenseScreen = ({ navigation, route }) => {
   const routeTripId = route?.params?.tripId || null;
   const fromTrip = !!routeTripId;
 
+  // Edit mode: pre-fill with existing expense data
+  const editExpense = route?.params?.expense || null;
+  const isEditMode = !!editExpense;
+
   // -- Category & trip state --
-  const [category, setCategory] = useState('kilometer');
-  const [selectedTripId, setSelectedTripId] = useState(routeTripId);
+  const [category, setCategory] = useState(editExpense?.category || 'kilometer');
+  const [selectedTripId, setSelectedTripId] = useState(routeTripId || editExpense?.tripId || null);
   const [trips, setTrips] = useState([]);
 
   // -- Preset state --
   const [selectedPresetId, setSelectedPresetId] = useState(null);
 
   // -- VAT state --
-  const [vatRateId, setVatRateId] = useState('vat_0');
+  const [vatRateId, setVatRateId] = useState(editExpense?.vatRateId || 'vat_0');
 
   // -- Amount state --
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(
+    editExpense ? String(parseFloat(editExpense.grossAmount || editExpense.amount) || '').replace('.', ',') : ''
+  );
 
   // -- Kilometer mode state --
-  const [startAddress, setStartAddress] = useState('');
-  const [endAddress, setEndAddress] = useState('');
-  const [licensePlate, setLicensePlate] = useState('');
-  const [tripDirection, setTripDirection] = useState('roundtrip'); // 'roundtrip' or 'oneway'
-  const [distanceResult, setDistanceResult] = useState(null);
+  const [startAddress, setStartAddress] = useState(editExpense?.startAddress || '');
+  const [endAddress, setEndAddress] = useState(editExpense?.endAddress || '');
+  const [licensePlate, setLicensePlate] = useState(editExpense?.licensePlate || '');
+  const [tripDirection, setTripDirection] = useState(editExpense?.tripDirection || 'roundtrip');
+  const [distanceResult, setDistanceResult] = useState(
+    editExpense?.distanceKmOneWay ? {
+      distanceKm: editExpense.distanceKmOneWay,
+      durationMinutes: (editExpense.durationMinutes || 0) / (editExpense.tripDirection === 'roundtrip' ? 2 : 1),
+      distanceText: `${editExpense.distanceKmOneWay.toFixed(1).replace('.', ',')} km`,
+      durationText: '',
+    } : null
+  );
   const [calculatingDistance, setCalculatingDistance] = useState(false);
-  const [manualDistanceInput, setManualDistanceInput] = useState('');
-  const [isManualDistance, setIsManualDistance] = useState(false);
+  const [manualDistanceInput, setManualDistanceInput] = useState(
+    editExpense?.isManualDistance && editExpense?.distanceKmOneWay
+      ? String(editExpense.distanceKmOneWay).replace('.', ',')
+      : ''
+  );
+  const [isManualDistance, setIsManualDistance] = useState(editExpense?.isManualDistance || false);
 
   // -- Geocoding autocomplete state --
   const [startSuggestions, setStartSuggestions] = useState([]);
@@ -86,12 +103,12 @@ const NewExpenseScreen = ({ navigation, route }) => {
   const [endCoords, setEndCoords] = useState(null);
 
   // -- Common fields --
-  const [description, setDescription] = useState('');
-  const [date, setDate] = useState(new Date());
+  const [description, setDescription] = useState(editExpense?.description || '');
+  const [date, setDate] = useState(editExpense?.date ? new Date(editExpense.date) : new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // -- Receipt photos (multiple) --
-  const [receiptUris, setReceiptUris] = useState([]);
+  const [receiptUris, setReceiptUris] = useState(editExpense?.receiptUris || []);
 
   // -- UI state --
   const [saving, setSaving] = useState(false);
@@ -102,11 +119,14 @@ const NewExpenseScreen = ({ navigation, route }) => {
   useEffect(() => {
     const loadAvailableTrips = async () => {
       const loadedTrips = await loadTrips();
-      const draftTrips = loadedTrips.filter((t) => t.status === 'entwurf');
-      setTrips(draftTrips);
+      // In edit mode, show the expense's trip regardless of status; otherwise only drafts
+      const availableTrips = isEditMode
+        ? loadedTrips.filter((t) => t.status === 'entwurf' || t.status === 'abgeschlossen' || t.id === editExpense?.tripId)
+        : loadedTrips.filter((t) => t.status === 'entwurf');
+      setTrips(availableTrips);
       // If coming from a specific trip, keep that selection; otherwise select first
-      if (!routeTripId && draftTrips.length > 0) {
-        setSelectedTripId(draftTrips[0].id);
+      if (!routeTripId && !isEditMode && availableTrips.length > 0) {
+        setSelectedTripId(availableTrips[0].id);
       }
     };
     loadAvailableTrips();
@@ -466,7 +486,7 @@ const NewExpenseScreen = ({ navigation, route }) => {
     setSaving(true);
 
     const expense = {
-      id: generateId(),
+      id: isEditMode ? editExpense.id : generateId(),
       category,
       grossAmount: grossAmount,
       netAmount: Math.round(netAmount * 100) / 100,
@@ -478,7 +498,8 @@ const NewExpenseScreen = ({ navigation, route }) => {
       receiptUris,
       tripId: selectedTripId,
       currency: 'EUR',
-      createdAt: new Date().toISOString(),
+      createdAt: isEditMode ? editExpense.createdAt : new Date().toISOString(),
+      updatedAt: isEditMode ? new Date().toISOString() : undefined,
     };
 
     // Add kilometer-specific fields
@@ -496,11 +517,18 @@ const NewExpenseScreen = ({ navigation, route }) => {
       }
     }
 
-    const success = await addExpense(expense);
+    const success = isEditMode
+      ? await updateExpense(editExpense.id, expense)
+      : await addExpense(expense);
 
     setSaving(false);
 
     if (success) {
+      if (isEditMode) {
+        setSnackbarMessage('Position erfolgreich aktualisiert!');
+        setSnackbarVisible(true);
+        setTimeout(() => navigation.goBack(), 600);
+      } else {
       // Reset form for potential next entry
       const resetForm = () => {
         setAmount('');
@@ -554,6 +582,7 @@ const NewExpenseScreen = ({ navigation, route }) => {
         setTimeout(() => {
           navigation.navigate('Übersicht');
         }, 800);
+      }
       }
     } else {
       setSnackbarMessage(
@@ -1213,7 +1242,7 @@ const NewExpenseScreen = ({ navigation, route }) => {
           textColor="#FFFFFF"
           icon="content-save"
         >
-          {fromTrip ? 'Position speichern' : 'Ausgabe speichern'}
+          {isEditMode ? 'Änderungen speichern' : fromTrip ? 'Position speichern' : 'Ausgabe speichern'}
         </Button>
       </ScrollView>
 

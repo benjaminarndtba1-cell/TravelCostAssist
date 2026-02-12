@@ -162,6 +162,14 @@ function AppStack() {
         }}
       />
       <Stack.Screen
+        name="AusgabeBearbeiten"
+        component={NewExpenseScreen}
+        options={{
+          headerTitle: 'Position bearbeiten',
+          headerBackTitle: 'Zurück',
+        }}
+      />
+      <Stack.Screen
         name="Abrechnung"
         component={ReportScreen}
         options={{

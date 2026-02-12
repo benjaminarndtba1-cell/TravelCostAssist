@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { getCategoryLabel } from './categories';
 import { getVatRateById } from './vatRates';
+import LOGO_BASE64 from '../config/logoBase64';
 
 // ==========================================
 // Data Preparation
@@ -144,7 +145,7 @@ const escapeHtml = (str) => {
     .replace(/"/g, '&quot;');
 };
 
-const generateHTML = (reportData, userProfile, startDate, endDate, receiptMap = {}) => {
+const generateHTML = (reportData, userProfile, startDate, endDate, receiptMap = {}, logoDataUri = null) => {
   const p = userProfile || {};
 
   const tripSections = reportData.tripReports
@@ -269,43 +270,44 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:9pt;color
 .r{text-align:right}
 
 /* HEADER */
-.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1565C0;padding-bottom:10px;margin-bottom:16px}
-.header-left .company{font-size:15pt;font-weight:700;color:#1565C0}
+.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:16px}
+.header-left .company{font-size:15pt;font-weight:700;color:#212121}
 .header-left .title{font-size:12pt;font-weight:600;color:#333;margin-top:2px}
 .header-right{text-align:right;font-size:8.5pt;color:#555;max-width:50%}
 .header-right strong{color:#212121;display:block;font-size:10pt;margin-bottom:2px}
+.header-logo{max-height:50px;max-width:180px;object-fit:contain}
 
 /* PERIOD */
-.period{background:#E8EDF2;padding:7px 12px;border-radius:4px;margin-bottom:18px;font-size:9.5pt}
-.period strong{color:#1565C0}
+.period{border:1px solid #CCC;padding:7px 12px;border-radius:4px;margin-bottom:18px;font-size:9.5pt}
+.period strong{color:#212121}
 
 /* TRIP SECTIONS */
 .trip{margin-bottom:20px}
-.trip-head{background:#F5F7FA;border-left:4px solid #1565C0;padding:7px 11px;margin-bottom:6px}
+.trip-head{border-left:3px solid #333;padding:7px 11px;margin-bottom:6px}
 .trip-name{font-size:11pt;font-weight:700;color:#212121}
 .trip-meta{font-size:8.5pt;color:#666;margin-top:2px}
-.trip-total{background:#E8EDF2;padding:6px 11px;border-radius:4px;font-size:10pt;text-align:right;margin-top:4px}
-.trip-total strong{color:#1565C0}
+.trip-total{border-top:1px solid #CCC;padding:6px 11px;font-size:10pt;text-align:right;margin-top:4px}
+.trip-total strong{color:#212121}
 
 /* TABLES */
 table{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:8.5pt}
-th{background:#1565C0;color:#fff;padding:5px 7px;text-align:left;font-weight:600;font-size:7.5pt;text-transform:uppercase;letter-spacing:.4px}
+th{background:#F5F5F5;color:#212121;padding:5px 7px;text-align:left;font-weight:600;font-size:7.5pt;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #333}
 th.r{text-align:right}
 td{padding:4px 7px;border-bottom:1px solid #E0E0E0}
 tr:nth-child(even){background:#FAFAFA}
-.sub td{border-top:2px solid #1565C0;border-bottom:none;padding-top:6px}
+.sub td{border-top:2px solid #333;border-bottom:none;padding-top:6px}
 .muted{color:#999;font-style:italic;margin:4px 0 8px}
-.meal-title{font-size:9.5pt;font-weight:600;color:#FF8F00;margin:8px 0 4px}
+.meal-title{font-size:9.5pt;font-weight:600;color:#212121;margin:8px 0 4px}
 
 /* SUMMARY */
-.section-title{font-size:10.5pt;font-weight:700;color:#1565C0;border-bottom:1px solid #1565C0;padding-bottom:3px;margin:20px 0 8px}
+.section-title{font-size:10.5pt;font-weight:700;color:#212121;border-bottom:1px solid #333;padding-bottom:3px;margin:20px 0 8px}
 .summary-table td{padding:5px 7px;font-size:9.5pt}
-.grand td{font-size:11pt;font-weight:700;color:#1565C0;border-top:3px double #1565C0;padding-top:8px}
+.grand td{font-size:11pt;font-weight:700;color:#212121;border-top:3px double #333;padding-top:8px}
 
 /* RECEIPTS */
-.receipts-section{margin-top:10px;page-break-before:auto}
-.receipts-title{font-size:9.5pt;font-weight:600;color:#1565C0;margin-bottom:6px;border-bottom:1px solid #1565C0;padding-bottom:3px}
-.receipt-item{margin-bottom:12px;page-break-inside:avoid}
+.receipts-section{margin-top:10px}
+.receipts-title{font-size:9.5pt;font-weight:600;color:#212121;margin-bottom:6px;border-bottom:1px solid #333;padding-bottom:3px}
+.receipt-item{margin-bottom:12px}
 .receipt-label{font-size:8pt;color:#555;font-weight:600;margin-bottom:4px}
 .receipt-img{max-width:100%;max-height:500px;border:1px solid #E0E0E0;border-radius:3px}
 
@@ -327,6 +329,7 @@ tr:nth-child(even){background:#FAFAFA}
     ${p.companyTaxId ? `<div style="font-size:8pt;color:#888;margin-top:2px">USt-IdNr.: ${escapeHtml(p.companyTaxId)}</div>` : ''}
   </div>
   <div class="header-right">
+    ${logoDataUri ? `<img src="${logoDataUri}" class="header-logo" /><br>` : ''}
     <strong>${escapeHtml(p.name) || 'N/A'}</strong>
     ${p.employeeId ? 'Personalnr.: ' + escapeHtml(p.employeeId) + '<br>' : ''}
     ${p.department ? 'Abteilung: ' + escapeHtml(p.department) + '<br>' : ''}
@@ -381,6 +384,29 @@ ${tripSections}
 // PDF Generation & Sharing
 // ==========================================
 
+const generateFileName = (userProfile, startDate, endDate) => {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const datePrefix = `${yy}${mm}${dd}`;
+
+  const name = (userProfile && userProfile.name)
+    ? userProfile.name.replace(/[^a-zA-ZäöüÄÖÜß\s-]/g, '').trim().replace(/\s+/g, '_')
+    : 'Mitarbeiter';
+
+  const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+  const startMonth = monthNames[startDate.getMonth()];
+  const endMonth = monthNames[endDate.getMonth()];
+  const year = endDate.getFullYear();
+
+  const period = startMonth === endMonth
+    ? `${startMonth}-${year}`
+    : `${startMonth}-${endMonth}_${year}`;
+
+  return `${datePrefix}_RK_Abrechnung_${name}_${period}.pdf`;
+};
+
 export const generateReportPDF = async ({
   trips,
   expenses,
@@ -396,20 +422,26 @@ export const generateReportPDF = async ({
   );
   const receiptMap = await loadReceiptImages(relevantExpenses);
 
-  const html = generateHTML(reportData, userProfile, startDate, endDate, receiptMap);
+  const html = generateHTML(reportData, userProfile, startDate, endDate, receiptMap, LOGO_BASE64);
 
   const { uri } = await Print.printToFileAsync({
     html,
     base64: false,
   });
 
-  await Sharing.shareAsync(uri, {
+  // Rename to meaningful filename
+  const fileName = generateFileName(userProfile, startDate, endDate);
+  const directory = uri.substring(0, uri.lastIndexOf('/') + 1);
+  const newUri = directory + fileName;
+  await FileSystem.moveAsync({ from: uri, to: newUri });
+
+  await Sharing.shareAsync(newUri, {
     mimeType: 'application/pdf',
-    dialogTitle: 'Reisekostenabrechnung',
+    dialogTitle: fileName.replace('.pdf', ''),
     UTI: 'com.adobe.pdf',
   });
 
-  return { uri, reportData };
+  return { uri: newUri, reportData };
 };
 
 export { buildReportData };

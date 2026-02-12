@@ -58,7 +58,64 @@ const TripDetailScreen = ({ route, navigation }) => {
     setRefreshing(false);
   };
 
+  const isCompleted = trip?.status === TRIP_STATUS.COMPLETED;
+
+  const handleEditExpense = (expense) => {
+    if (isCompleted) {
+      Alert.alert(
+        'Reise abgeschlossen',
+        'Diese Reise ist bereits abgeschlossen. Möchten Sie die Position trotzdem bearbeiten?',
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          {
+            text: 'Trotzdem bearbeiten',
+            onPress: () => navigation.navigate('AusgabeBearbeiten', { expense, tripId: trip.id }),
+          },
+        ]
+      );
+    } else {
+      navigation.navigate('AusgabeBearbeiten', { expense, tripId: trip.id });
+    }
+  };
+
+  const handleAddExpense = () => {
+    if (isCompleted) {
+      Alert.alert(
+        'Reise abgeschlossen',
+        'Diese Reise ist bereits abgeschlossen. Möchten Sie trotzdem eine neue Position hinzufügen?',
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          {
+            text: 'Trotzdem hinzufügen',
+            onPress: () => navigation.navigate('NeueAusgabeStack', { tripId: trip.id }),
+          },
+        ]
+      );
+    } else {
+      navigation.navigate('NeueAusgabeStack', { tripId: trip.id });
+    }
+  };
+
   const handleDeleteExpense = (expense) => {
+    if (isCompleted) {
+      Alert.alert(
+        'Reise abgeschlossen',
+        'Diese Reise ist bereits abgeschlossen. Möchten Sie die Position trotzdem löschen?',
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          {
+            text: 'Trotzdem löschen',
+            style: 'destructive',
+            onPress: () => confirmDeleteExpense(expense),
+          },
+        ]
+      );
+    } else {
+      confirmDeleteExpense(expense);
+    }
+  };
+
+  const confirmDeleteExpense = (expense) => {
     Alert.alert(
       'Ausgabe löschen',
       `Möchten Sie diese Ausgabe wirklich löschen?`,
@@ -69,6 +126,40 @@ const TripDetailScreen = ({ route, navigation }) => {
           style: 'destructive',
           onPress: async () => {
             await deleteExpense(expense.id);
+            await loadData();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCompleteTrip = () => {
+    Alert.alert(
+      'Reise abschließen',
+      'Möchten Sie diese Reise als abgeschlossen markieren? Sie können danach nur noch mit einer Warnung Änderungen vornehmen.',
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Abschließen',
+          onPress: async () => {
+            await updateTrip(tripId, { status: TRIP_STATUS.COMPLETED });
+            await loadData();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReopenTrip = () => {
+    Alert.alert(
+      'Reise wieder öffnen',
+      'Möchten Sie diese Reise wieder in den Entwurf-Status versetzen?',
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Wieder öffnen',
+          onPress: async () => {
+            await updateTrip(tripId, { status: TRIP_STATUS.DRAFT });
             await loadData();
           },
         },
@@ -266,18 +357,42 @@ const TripDetailScreen = ({ route, navigation }) => {
         </View>
       </Surface>
 
-      {/* Submit Button */}
+      {/* Action Buttons */}
       {trip.status === TRIP_STATUS.DRAFT && expenses.length > 0 ? (
-        <Button
-          mode="contained"
-          icon="send"
-          onPress={handleSubmitTrip}
-          style={styles.submitButton}
-          buttonColor={theme.colors.primary}
-          textColor="#FFFFFF"
-        >
-          Reise zur Genehmigung einreichen
-        </Button>
+        <View style={styles.actionButtons}>
+          <Button
+            mode="contained"
+            icon="check-circle"
+            onPress={handleCompleteTrip}
+            style={styles.submitButton}
+            buttonColor="#2E7D32"
+            textColor="#FFFFFF"
+          >
+            Reise abschließen
+          </Button>
+          <Button
+            mode="outlined"
+            icon="send"
+            onPress={handleSubmitTrip}
+            style={styles.submitButton}
+            textColor={theme.colors.primary}
+          >
+            Zur Genehmigung einreichen
+          </Button>
+        </View>
+      ) : null}
+      {trip.status === TRIP_STATUS.COMPLETED ? (
+        <View style={styles.actionButtons}>
+          <Button
+            mode="outlined"
+            icon="lock-open-variant"
+            onPress={handleReopenTrip}
+            style={styles.submitButton}
+            textColor={theme.colors.textSecondary}
+          >
+            Reise wieder öffnen
+          </Button>
+        </View>
       ) : null}
 
       {/* Expenses Header */}
@@ -312,7 +427,7 @@ const TripDetailScreen = ({ route, navigation }) => {
         renderItem={({ item }) => (
           <ExpenseCard
             expense={item}
-            onPress={() => {}}
+            onPress={() => handleEditExpense(item)}
             onLongPress={() => handleDeleteExpense(item)}
           />
         )}
@@ -329,12 +444,12 @@ const TripDetailScreen = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
       />
 
-      {trip.status === TRIP_STATUS.DRAFT ? (
+      {(trip.status === TRIP_STATUS.DRAFT || trip.status === TRIP_STATUS.COMPLETED) ? (
         <FAB
           icon="plus"
           style={styles.fab}
           color="#FFFFFF"
-          onPress={() => navigation.navigate('NeueAusgabeStack', { tripId: trip.id })}
+          onPress={handleAddExpense}
         />
       ) : null}
     </View>
@@ -487,9 +602,12 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '700',
   },
-  submitButton: {
-    marginHorizontal: theme.spacing.md,
+  actionButtons: {
+    paddingHorizontal: theme.spacing.md,
+    gap: theme.spacing.sm,
     marginBottom: theme.spacing.sm + 4,
+  },
+  submitButton: {
     borderRadius: theme.roundness,
   },
   expensesHeader: {

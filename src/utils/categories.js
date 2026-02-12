@@ -109,6 +109,7 @@ export const getCategoryIcon = (id) => {
 
 export const TRIP_STATUS = {
   DRAFT: 'entwurf',
+  COMPLETED: 'abgeschlossen',
   SUBMITTED: 'eingereicht',
   APPROVED: 'genehmigt',
   REJECTED: 'abgelehnt',
@@ -116,6 +117,7 @@ export const TRIP_STATUS = {
 
 export const TRIP_STATUS_LABELS = {
   [TRIP_STATUS.DRAFT]: 'Entwurf',
+  [TRIP_STATUS.COMPLETED]: 'Abgeschlossen',
   [TRIP_STATUS.SUBMITTED]: 'Eingereicht',
   [TRIP_STATUS.APPROVED]: 'Genehmigt',
   [TRIP_STATUS.REJECTED]: 'Abgelehnt',
@@ -123,6 +125,7 @@ export const TRIP_STATUS_LABELS = {
 
 export const TRIP_STATUS_COLORS = {
   [TRIP_STATUS.DRAFT]: '#9E9E9E',
+  [TRIP_STATUS.COMPLETED]: '#2E7D32',
   [TRIP_STATUS.SUBMITTED]: '#1565C0',
   [TRIP_STATUS.APPROVED]: '#2E7D32',
   [TRIP_STATUS.REJECTED]: '#D32F2F',
