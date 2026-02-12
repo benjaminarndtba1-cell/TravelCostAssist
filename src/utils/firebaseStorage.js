@@ -12,7 +12,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   Timestamp
 } from 'firebase/firestore';
 import { auth, firestore } from '../config/firebase';
@@ -62,8 +61,7 @@ export const loadExpenses = async () => {
     const expensesRef = collection(firestore, 'expenses');
     const q = query(
       expensesRef,
-      where('userId', '==', userId),
-      orderBy('date', 'desc')
+      where('userId', '==', userId)
     );
 
     const snapshot = await getDocs(q);
@@ -78,6 +76,8 @@ export const loadExpenses = async () => {
       };
     });
 
+    // Clientseitig sortieren (vermeidet Composite Index Requirement)
+    expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
     return expenses;
   } catch (error) {
     console.error('Fehler beim Laden der Expenses:', error);
@@ -214,8 +214,7 @@ export const getExpensesByTrip = async (tripId) => {
     const q = query(
       expensesRef,
       where('userId', '==', userId),
-      where('tripId', '==', tripId),
-      orderBy('date', 'desc')
+      where('tripId', '==', tripId)
     );
 
     const snapshot = await getDocs(q);
@@ -230,6 +229,8 @@ export const getExpensesByTrip = async (tripId) => {
       };
     });
 
+    // Clientseitig sortieren (vermeidet Composite Index Requirement)
+    expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
     return expenses;
   } catch (error) {
     console.error('Fehler beim Laden der Expenses für Trip:', error);
@@ -253,8 +254,7 @@ export const loadTrips = async () => {
     const tripsRef = collection(firestore, 'trips');
     const q = query(
       tripsRef,
-      where('userId', '==', userId),
-      orderBy('startDateTime', 'desc')
+      where('userId', '==', userId)
     );
 
     const snapshot = await getDocs(q);
@@ -270,6 +270,8 @@ export const loadTrips = async () => {
       };
     });
 
+    // Clientseitig sortieren (vermeidet Composite Index Requirement)
+    trips.sort((a, b) => new Date(b.startDateTime) - new Date(a.startDateTime));
     return trips;
   } catch (error) {
     console.error('Fehler beim Laden der Trips:', error);

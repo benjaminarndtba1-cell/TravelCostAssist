@@ -1,6 +1,5 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { getCategoryLabel } from './categories';
@@ -91,22 +90,30 @@ const buildReportData = (trips, allExpenses) => {
 // Receipt Image Loading
 // ==========================================
 
+const imageToBase64DataUri = async (uri) => {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
 const loadReceiptImages = async (expenses) => {
   const receiptMap = {};
 
   for (const expense of expenses) {
-    const uris = expense.receiptUris || (expense.receiptUri ? [expense.receiptUri] : []);
+    // Firebase Storage URLs oder lokale URIs
+    const uris = expense.receiptUrls || expense.receiptUris || (expense.receiptUri ? [expense.receiptUri] : []);
     if (uris.length === 0) continue;
 
     const images = [];
     for (const uri of uris) {
       try {
-        const base64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        const ext = uri.split('.').pop().toLowerCase();
-        const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
-        images.push(`data:${mime};base64,${base64}`);
+        const dataUri = await imageToBase64DataUri(uri);
+        images.push(dataUri);
       } catch (err) {
         console.warn('Could not load receipt image:', uri, err.message);
       }
@@ -237,21 +244,26 @@ const generateHTML = (reportData, userProfile, startDate, endDate, receiptMap = 
       <div class="trip-total">Gesamtbetrag dieser Reise: <strong>${formatCurrency(tr.tripTotal)}</strong></div>
 
       ${(() => {
+        let receiptCounter = 0;
         const receiptItems = tr.expenses
-          .map((e, eIdx) => {
+          .map((e) => {
             const images = receiptMap[e.id];
             if (!images || images.length === 0) return '';
-            return images.map((dataUri, imgIdx) =>
-              `<div class="receipt-item">
-                <div class="receipt-label">Beleg ${eIdx + 1}${images.length > 1 ? String.fromCharCode(97 + imgIdx) : ''}: ${escapeHtml(getCategoryLabel(e.category))} &ndash; ${formatDate(e.date)}${e.description ? ' &ndash; ' + escapeHtml(e.description) : ''}</div>
+            return images.map((dataUri, imgIdx) => {
+              receiptCounter++;
+              const belegNr = `Beleg Nr. ${receiptCounter}`;
+              const suffix = images.length > 1 ? String.fromCharCode(97 + imgIdx) : '';
+              return `<div class="receipt-item">
+                <div class="receipt-label">${belegNr}${suffix}: ${escapeHtml(getCategoryLabel(e.category))} &ndash; ${formatDate(e.date)}${e.description ? ' &ndash; ' + escapeHtml(e.description) : ''}</div>
                 <img src="${dataUri}" class="receipt-img" />
-              </div>`
-            ).join('');
+                <div class="receipt-caption">${belegNr}${suffix} &ndash; ${escapeHtml(getCategoryLabel(e.category))}, ${formatDate(e.date)}</div>
+              </div>`;
+            }).join('');
           })
           .join('');
         return receiptItems
           ? `<div class="receipts-section">
-              <div class="receipts-title">Belege</div>
+              <div class="receipts-title">Belege zu Reise: ${escapeHtml(tr.trip.name)}</div>
               ${receiptItems}
             </div>`
           : '';
@@ -305,11 +317,12 @@ tr:nth-child(even){background:#FAFAFA}
 .grand td{font-size:11pt;font-weight:700;color:#212121;border-top:3px double #333;padding-top:8px}
 
 /* RECEIPTS */
-.receipts-section{margin-top:10px}
-.receipts-title{font-size:9.5pt;font-weight:600;color:#212121;margin-bottom:6px;border-bottom:1px solid #333;padding-bottom:3px}
-.receipt-item{margin-bottom:12px}
+.receipts-section{page-break-before:always;margin-top:0;padding-top:10px}
+.receipts-title{font-size:10.5pt;font-weight:700;color:#212121;margin-bottom:8px;border-bottom:1px solid #333;padding-bottom:3px}
+.receipt-item{margin-bottom:16px;page-break-inside:avoid}
 .receipt-label{font-size:8pt;color:#555;font-weight:600;margin-bottom:4px}
 .receipt-img{max-width:100%;max-height:500px;border:1px solid #E0E0E0;border-radius:3px}
+.receipt-caption{font-size:8pt;color:#333;font-weight:600;text-align:center;margin-top:4px;padding:3px 0;border-bottom:1px solid #E0E0E0}
 
 /* FOOTER */
 .footer{margin-top:36px;padding-top:12px;border-top:1px solid #E0E0E0}
@@ -424,24 +437,20 @@ export const generateReportPDF = async ({
 
   const html = generateHTML(reportData, userProfile, startDate, endDate, receiptMap, LOGO_BASE64);
 
+  const fileName = generateFileName(userProfile, startDate, endDate);
+
   const { uri } = await Print.printToFileAsync({
     html,
     base64: false,
   });
 
-  // Rename to meaningful filename
-  const fileName = generateFileName(userProfile, startDate, endDate);
-  const directory = uri.substring(0, uri.lastIndexOf('/') + 1);
-  const newUri = directory + fileName;
-  await FileSystem.moveAsync({ from: uri, to: newUri });
-
-  await Sharing.shareAsync(newUri, {
+  await Sharing.shareAsync(uri, {
     mimeType: 'application/pdf',
     dialogTitle: fileName.replace('.pdf', ''),
     UTI: 'com.adobe.pdf',
   });
 
-  return { uri: newUri, reportData };
+  return { uri, reportData };
 };
 
 export { buildReportData };
