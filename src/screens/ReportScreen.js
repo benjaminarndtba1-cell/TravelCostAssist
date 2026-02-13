@@ -23,7 +23,6 @@ import {
   loadTrips,
   loadExpenses,
   loadUserProfile,
-  loadSettings,
 } from '../utils/storage';
 import { generateReportPDF } from '../utils/reportGenerator';
 
@@ -43,7 +42,6 @@ const ReportScreen = () => {
   const [filteredTrips, setFilteredTrips] = useState([]);
   const [allExpenses, setAllExpenses] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
-  const [settings, setSettings] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
 
   // Summary state
@@ -59,12 +57,8 @@ const ReportScreen = () => {
   useFocusEffect(
     useCallback(() => {
       const loadBase = async () => {
-        const [profile, appSettings] = await Promise.all([
-          loadUserProfile(),
-          loadSettings(),
-        ]);
+        const profile = await loadUserProfile();
         setUserProfile(profile);
-        setSettings(appSettings);
       };
       loadBase();
     }, [])
@@ -142,7 +136,6 @@ const ReportScreen = () => {
         trips: filteredTrips,
         expenses: allExpenses,
         userProfile,
-        settings,
         startDate,
         endDate,
       });

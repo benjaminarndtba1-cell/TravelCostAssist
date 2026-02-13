@@ -42,9 +42,7 @@ const buildReportData = (trips, allExpenses) => {
       (sum, e) => sum + (parseFloat(e.vatAmount) || 0),
       0
     );
-    const mealAllowanceTotal = trip.mealAllowances
-      ? trip.mealAllowances.totalAmount
-      : 0;
+    const mealAllowanceTotal = parseFloat(trip.mealAllowances?.totalAmount) || 0;
 
     tripExpenses.forEach((e) => {
       const rateId = e.vatRateId || 'vat_19';
@@ -91,6 +89,9 @@ const buildReportData = (trips, allExpenses) => {
 
 const imageToBase64DataUri = async (uri) => {
   const response = await fetch(uri);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} beim Laden von ${uri}`);
+  }
   const blob = await response.blob();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -144,11 +145,12 @@ const formatDateTime = (dateStr) =>
 
 const escapeHtml = (str) => {
   if (!str) return '';
-  return str
+  return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 };
 
 const generateHTML = (reportData, userProfile, startDate, endDate, receiptMap = {}) => {
@@ -162,7 +164,7 @@ const generateHTML = (reportData, userProfile, startDate, endDate, receiptMap = 
           const desc = escapeHtml(e.description) || '&ndash;';
           const kmInfo =
             e.category === 'kilometer' && e.distanceKm
-              ? ` (${e.distanceKm} km)`
+              ? ` (${escapeHtml(String(e.distanceKm))} km)`
               : '';
           const plateInfo = e.licensePlate
             ? ` [${escapeHtml(e.licensePlate)}]`
@@ -180,7 +182,7 @@ const generateHTML = (reportData, userProfile, startDate, endDate, receiptMap = 
         .join('');
 
       const mealRows =
-        tr.trip.mealAllowances && tr.trip.mealAllowances.breakdown.length > 0
+        tr.trip.mealAllowances?.breakdown?.length > 0
           ? tr.trip.mealAllowances.breakdown
               .map(
                 (day) => `<tr>
@@ -248,8 +250,8 @@ const generateHTML = (reportData, userProfile, startDate, endDate, receiptMap = 
           .map((e) => {
             const images = receiptMap[e.id];
             if (!images || images.length === 0) return '';
+            receiptCounter++;
             return images.map((dataUri, imgIdx) => {
-              receiptCounter++;
               const belegNr = `Beleg Nr. ${receiptCounter}`;
               const suffix = images.length > 1 ? String.fromCharCode(97 + imgIdx) : '';
               return `<div class="receipt-item">
@@ -450,4 +452,3 @@ export const generateReportPDF = async ({
   return { uri, reportData };
 };
 
-export { buildReportData };
