@@ -4,7 +4,6 @@ import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { getCategoryLabel } from './categories';
 import { getVatRateById } from './vatRates';
-import LOGO_BASE64 from '../config/logoBase64';
 
 // ==========================================
 // Data Preparation
@@ -152,7 +151,7 @@ const escapeHtml = (str) => {
     .replace(/"/g, '&quot;');
 };
 
-const generateHTML = (reportData, userProfile, startDate, endDate, receiptMap = {}, logoDataUri = null) => {
+const generateHTML = (reportData, userProfile, startDate, endDate, receiptMap = {}) => {
   const p = userProfile || {};
 
   const tripSections = reportData.tripReports
@@ -287,7 +286,6 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:9pt;color
 .header-left .title{font-size:12pt;font-weight:600;color:#333;margin-top:2px}
 .header-right{text-align:right;font-size:8.5pt;color:#555;max-width:50%}
 .header-right strong{color:#212121;display:block;font-size:10pt;margin-bottom:2px}
-.header-logo{max-height:50px;max-width:180px;object-fit:contain}
 
 /* PERIOD */
 .period{border:1px solid #CCC;padding:7px 12px;border-radius:4px;margin-bottom:18px;font-size:9.5pt}
@@ -319,9 +317,9 @@ tr:nth-child(even){background:#FAFAFA}
 /* RECEIPTS */
 .receipts-section{page-break-before:always;margin-top:0;padding-top:10px}
 .receipts-title{font-size:10.5pt;font-weight:700;color:#212121;margin-bottom:8px;border-bottom:1px solid #333;padding-bottom:3px}
-.receipt-item{margin-bottom:16px;page-break-inside:avoid}
+.receipt-item{margin-bottom:16px;page-break-inside:avoid;text-align:center}
 .receipt-label{font-size:8pt;color:#555;font-weight:600;margin-bottom:4px}
-.receipt-img{max-width:100%;max-height:500px;border:1px solid #E0E0E0;border-radius:3px}
+.receipt-img{max-width:100%;max-height:500px;border:1px solid #E0E0E0;border-radius:3px;display:block;margin:0 auto}
 .receipt-caption{font-size:8pt;color:#333;font-weight:600;text-align:center;margin-top:4px;padding:3px 0;border-bottom:1px solid #E0E0E0}
 
 /* FOOTER */
@@ -342,7 +340,6 @@ tr:nth-child(even){background:#FAFAFA}
     ${p.companyTaxId ? `<div style="font-size:8pt;color:#888;margin-top:2px">USt-IdNr.: ${escapeHtml(p.companyTaxId)}</div>` : ''}
   </div>
   <div class="header-right">
-    ${logoDataUri ? `<img src="${logoDataUri}" class="header-logo" /><br>` : ''}
     <strong>${escapeHtml(p.name) || 'N/A'}</strong>
     ${p.employeeId ? 'Personalnr.: ' + escapeHtml(p.employeeId) + '<br>' : ''}
     ${p.department ? 'Abteilung: ' + escapeHtml(p.department) + '<br>' : ''}
@@ -435,7 +432,7 @@ export const generateReportPDF = async ({
   );
   const receiptMap = await loadReceiptImages(relevantExpenses);
 
-  const html = generateHTML(reportData, userProfile, startDate, endDate, receiptMap, LOGO_BASE64);
+  const html = generateHTML(reportData, userProfile, startDate, endDate, receiptMap);
 
   const fileName = generateFileName(userProfile, startDate, endDate);
 
