@@ -14,30 +14,28 @@ import {
   Button,
   Text,
   Snackbar,
-  ActivityIndicator,
-  HelperText
 } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
+import { useSnackbar } from '../hooks/useSnackbar';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [secureTextEntry, setSecureTextEntry] = useState(true);
-  const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const { signIn } = useAuth();
+  const snackbar = useSnackbar(4000);
 
   const handleLogin = async () => {
     // Validierung
     if (!email.trim()) {
-      showSnackbar('Bitte E-Mail-Adresse eingeben');
+      snackbar.show('Bitte E-Mail-Adresse eingeben');
       return;
     }
 
     if (!password) {
-      showSnackbar('Bitte Passwort eingeben');
+      snackbar.show('Bitte Passwort eingeben');
       return;
     }
 
@@ -48,22 +46,17 @@ const LoginScreen = ({ navigation }) => {
     setIsLoading(false);
 
     if (!result.success) {
-      showSnackbar(result.error || 'Login fehlgeschlagen');
+      snackbar.show(result.error || 'Login fehlgeschlagen');
     }
     // Bei Erfolg navigiert AuthContext automatisch zur App
   };
 
   const handleForgotPassword = () => {
     if (!email.trim()) {
-      showSnackbar('Bitte E-Mail-Adresse eingeben');
+      snackbar.show('Bitte E-Mail-Adresse eingeben');
       return;
     }
     navigation.navigate('ForgotPassword', { email: email.trim() });
-  };
-
-  const showSnackbar = (message) => {
-    setSnackbarMessage(message);
-    setSnackbarVisible(true);
   };
 
   return (
@@ -153,18 +146,7 @@ const LoginScreen = ({ navigation }) => {
         </View>
       </ScrollView>
 
-      {/* Snackbar für Fehlermeldungen */}
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={4000}
-        action={{
-          label: 'OK',
-          onPress: () => setSnackbarVisible(false),
-        }}
-      >
-        {snackbarMessage}
-      </Snackbar>
+      <Snackbar {...snackbar.snackbarProps} />
     </KeyboardAvoidingView>
   );
 };

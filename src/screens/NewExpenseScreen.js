@@ -22,12 +22,13 @@ import {
 } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
+import theme from '../theme';
+import { formatDateDE } from '../utils/formatting';
+import { useSnackbar } from '../hooks/useSnackbar';
+
 // Einfache ID-Generierung ohne crypto.getRandomValues() (React Native kompatibel)
 const generateId = () =>
   Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
-import theme from '../theme';
 import EXPENSE_CATEGORIES, { getCategoryById, getPresetsForCategory } from '../utils/categories';
 import { addExpense, updateExpense, loadTrips } from '../utils/storage';
 import VAT_RATES, {
@@ -112,8 +113,7 @@ const NewExpenseScreen = ({ navigation, route }) => {
 
   // -- UI state --
   const [saving, setSaving] = useState(false);
-  const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const snackbar = useSnackbar();
 
   // Load available trips on mount
   useEffect(() => {
@@ -257,7 +257,7 @@ const NewExpenseScreen = ({ navigation, route }) => {
   const netAmount = calculateNetAmount(grossAmount, vatRateId);
   const vatAmount = calculateVatAmount(grossAmount, vatRateId);
 
-  const formattedDate = format(date, 'EEEE, dd. MMMM yyyy', { locale: de });
+  const formattedDate = formatDateDE(date, 'EEEE, dd. MMMM yyyy');
 
   // -- Date handling --
   const onDateChange = (event, selectedDate) => {
@@ -270,13 +270,13 @@ const NewExpenseScreen = ({ navigation, route }) => {
   // -- Distance calculation --
   const handleCalculateDistance = async () => {
     if (!startAddress.trim()) {
-      setSnackbarMessage('Bitte geben Sie eine Startadresse ein.');
-      setSnackbarVisible(true);
+      snackbar.show('Bitte geben Sie eine Startadresse ein.');
+
       return;
     }
     if (!endAddress.trim()) {
-      setSnackbarMessage('Bitte geben Sie eine Zieladresse ein.');
-      setSnackbarVisible(true);
+      snackbar.show('Bitte geben Sie eine Zieladresse ein.');
+
       return;
     }
 
@@ -368,8 +368,8 @@ const NewExpenseScreen = ({ navigation, route }) => {
     if (result.success) {
       setDistanceResult(result);
     } else {
-      setSnackbarMessage(result.error || 'Entfernungsberechnung fehlgeschlagen.');
-      setSnackbarVisible(true);
+      snackbar.show(result.error || 'Entfernungsberechnung fehlgeschlagen.');
+
     }
   };
 
@@ -435,34 +435,34 @@ const NewExpenseScreen = ({ navigation, route }) => {
     if (category === 'kilometer') {
       if (!isManualDistance) {
         if (!startAddress.trim()) {
-          setSnackbarMessage('Bitte geben Sie eine Startadresse ein.');
-          setSnackbarVisible(true);
+          snackbar.show('Bitte geben Sie eine Startadresse ein.');
+    
           return false;
         }
         if (!endAddress.trim()) {
-          setSnackbarMessage('Bitte geben Sie eine Zieladresse ein.');
-          setSnackbarVisible(true);
+          snackbar.show('Bitte geben Sie eine Zieladresse ein.');
+    
           return false;
         }
       }
       if (!distanceResult) {
-        setSnackbarMessage('Bitte berechnen Sie die Entfernung oder geben Sie sie manuell ein.');
-        setSnackbarVisible(true);
+        snackbar.show('Bitte berechnen Sie die Entfernung oder geben Sie sie manuell ein.');
+  
         return false;
       }
     } else {
       if (!amount || parseAmount(amount) <= 0) {
-        setSnackbarMessage('Bitte geben Sie einen gültigen Betrag ein.');
-        setSnackbarVisible(true);
+        snackbar.show('Bitte geben Sie einen gültigen Betrag ein.');
+  
         return false;
       }
     }
 
     if (!selectedTripId) {
-      setSnackbarMessage(
+      snackbar.show(
         'Bitte erstellen Sie zuerst eine Reise unter dem Tab "Reisen".'
       );
-      setSnackbarVisible(true);
+
       return false;
     }
 
@@ -515,8 +515,8 @@ const NewExpenseScreen = ({ navigation, route }) => {
 
     if (success) {
       if (isEditMode) {
-        setSnackbarMessage('Position erfolgreich aktualisiert!');
-        setSnackbarVisible(true);
+        snackbar.show('Position erfolgreich aktualisiert!');
+  
         setTimeout(() => navigation.goBack(), 600);
       } else {
       // Reset form for potential next entry
@@ -557,15 +557,15 @@ const NewExpenseScreen = ({ navigation, route }) => {
               text: 'Weitere Position',
               onPress: () => {
                 resetForm();
-                setSnackbarMessage('Position gespeichert. Neue Position erfassen.');
-                setSnackbarVisible(true);
+                snackbar.show('Position gespeichert. Neue Position erfassen.');
+          
               },
             },
           ]
         );
       } else {
-        setSnackbarMessage('Ausgabe erfolgreich gespeichert!');
-        setSnackbarVisible(true);
+        snackbar.show('Ausgabe erfolgreich gespeichert!');
+  
         resetForm();
 
         // Navigate back to dashboard after short delay
@@ -575,10 +575,10 @@ const NewExpenseScreen = ({ navigation, route }) => {
       }
       }
     } else {
-      setSnackbarMessage(
+      snackbar.show(
         'Fehler beim Speichern. Bitte versuchen Sie es erneut.'
       );
-      setSnackbarVisible(true);
+
     }
   };
 
@@ -1236,17 +1236,7 @@ const NewExpenseScreen = ({ navigation, route }) => {
         </Button>
       </ScrollView>
 
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
-        action={{
-          label: 'OK',
-          onPress: () => setSnackbarVisible(false),
-        }}
-      >
-        {snackbarMessage}
-      </Snackbar>
+      <Snackbar {...snackbar.snackbarProps} />
     </KeyboardAvoidingView>
   );
 };

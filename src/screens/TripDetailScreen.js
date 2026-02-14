@@ -24,14 +24,12 @@ import {
 } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
 import theme from '../theme';
 import { loadTrips, loadExpenses, deleteExpense, updateTrip } from '../utils/storage';
 import { TRIP_STATUS, TRIP_STATUS_LABELS, TRIP_STATUS_COLORS } from '../utils/categories';
-import { getVatRateById } from '../utils/vatRates';
 import { calculateMealAllowances, formatAbsenceDuration } from '../utils/verpflegungspauschalen';
 import { formatCurrency, formatDateDE } from '../utils/formatting';
+import { useSnackbar } from '../hooks/useSnackbar';
 import ExpenseCard from '../components/ExpenseCard';
 
 const combineDateAndTime = (date, time) => {
@@ -61,8 +59,7 @@ const TripDetailScreen = ({ route, navigation }) => {
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const snackbar = useSnackbar();
   const [editModalOpened, setEditModalOpened] = useState(false);
 
   // Preview of meal allowances based on current date/time selection in edit modal
@@ -167,8 +164,7 @@ const TripDetailScreen = ({ route, navigation }) => {
 
       if (success) {
         setEditModalVisible(false);
-        setSnackbarMessage('Reisedaten erfolgreich aktualisiert!');
-        setSnackbarVisible(true);
+        snackbar.show('Reisedaten erfolgreich aktualisiert!');
         await loadData();
       } else {
         Alert.alert('Fehler', 'Fehler beim Speichern der Reisedaten.');
@@ -356,8 +352,7 @@ const TripDetailScreen = ({ route, navigation }) => {
           text: 'Archivieren',
           onPress: async () => {
             await updateTrip(tripId, { isArchived: true });
-            setSnackbarMessage('Reise wurde archiviert.');
-            setSnackbarVisible(true);
+            snackbar.show('Reise wurde archiviert.');
             navigation.goBack();
           },
         },
@@ -375,8 +370,7 @@ const TripDetailScreen = ({ route, navigation }) => {
           text: 'Wiederherstellen',
           onPress: async () => {
             await updateTrip(tripId, { isArchived: false });
-            setSnackbarMessage('Reise wurde wiederhergestellt.');
-            setSnackbarVisible(true);
+            snackbar.show('Reise wurde wiederhergestellt.');
             await loadData();
           },
         },
@@ -776,7 +770,7 @@ const TripDetailScreen = ({ route, navigation }) => {
                       style={styles.dateButton}
                       textColor={theme.colors.text}
                     >
-                      {format(editStartDate, 'dd.MM.yyyy', { locale: de })}
+                      {formatDateDE(editStartDate, 'dd.MM.yyyy')}
                     </Button>
                     <Button
                       mode="outlined"
@@ -785,7 +779,7 @@ const TripDetailScreen = ({ route, navigation }) => {
                       style={styles.timeButton}
                       textColor={theme.colors.text}
                     >
-                      {format(editStartTime, 'HH:mm', { locale: de })}
+                      {formatDateDE(editStartTime, 'HH:mm')}
                     </Button>
                   </View>
                   {showStartDatePicker && (
@@ -820,7 +814,7 @@ const TripDetailScreen = ({ route, navigation }) => {
                       style={styles.dateButton}
                       textColor={theme.colors.text}
                     >
-                      {format(editEndDate, 'dd.MM.yyyy', { locale: de })}
+                      {formatDateDE(editEndDate, 'dd.MM.yyyy')}
                     </Button>
                     <Button
                       mode="outlined"
@@ -829,7 +823,7 @@ const TripDetailScreen = ({ route, navigation }) => {
                       style={styles.timeButton}
                       textColor={theme.colors.text}
                     >
-                      {format(editEndTime, 'HH:mm', { locale: de })}
+                      {formatDateDE(editEndTime, 'HH:mm')}
                     </Button>
                   </View>
                   {showEndDatePicker && (
@@ -909,17 +903,7 @@ const TripDetailScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
-        action={{
-          label: 'OK',
-          onPress: () => setSnackbarVisible(false),
-        }}
-      >
-        {snackbarMessage}
-      </Snackbar>
+      <Snackbar {...snackbar.snackbarProps} />
     </View>
   );
 };

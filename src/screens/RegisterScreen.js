@@ -17,6 +17,7 @@ import {
   HelperText
 } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
+import { useSnackbar } from '../hooks/useSnackbar';
 
 const RegisterScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -26,11 +27,10 @@ const RegisterScreen = ({ navigation }) => {
   const [department, setDepartment] = useState('');
   const [secureTextEntry, setSecureTextEntry] = useState(true);
   const [secureConfirmEntry, setSecureConfirmEntry] = useState(true);
-  const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const { signUp } = useAuth();
+  const snackbar = useSnackbar(4000);
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -40,32 +40,32 @@ const RegisterScreen = ({ navigation }) => {
   const handleRegister = async () => {
     // Validierung
     if (!name.trim()) {
-      showSnackbar('Bitte Namen eingeben');
+      snackbar.show('Bitte Namen eingeben');
       return;
     }
 
     if (!email.trim()) {
-      showSnackbar('Bitte E-Mail-Adresse eingeben');
+      snackbar.show('Bitte E-Mail-Adresse eingeben');
       return;
     }
 
     if (!validateEmail(email.trim())) {
-      showSnackbar('Bitte gültige E-Mail-Adresse eingeben');
+      snackbar.show('Bitte gültige E-Mail-Adresse eingeben');
       return;
     }
 
     if (!password) {
-      showSnackbar('Bitte Passwort eingeben');
+      snackbar.show('Bitte Passwort eingeben');
       return;
     }
 
     if (password.length < 6) {
-      showSnackbar('Passwort muss mindestens 6 Zeichen lang sein');
+      snackbar.show('Passwort muss mindestens 6 Zeichen lang sein');
       return;
     }
 
     if (password !== confirmPassword) {
-      showSnackbar('Passwörter stimmen nicht überein');
+      snackbar.show('Passwörter stimmen nicht überein');
       return;
     }
 
@@ -81,17 +81,13 @@ const RegisterScreen = ({ navigation }) => {
     setIsLoading(false);
 
     if (result.success) {
-      showSnackbar('Registrierung erfolgreich!');
+      snackbar.show('Registrierung erfolgreich!');
       // AuthContext navigiert automatisch zur App
     } else {
-      showSnackbar(result.error || 'Registrierung fehlgeschlagen');
+      snackbar.show(result.error || 'Registrierung fehlgeschlagen');
     }
   };
 
-  const showSnackbar = (message) => {
-    setSnackbarMessage(message);
-    setSnackbarVisible(true);
-  };
 
   const passwordsMatch = password === confirmPassword;
   const showPasswordMismatch = confirmPassword.length > 0 && !passwordsMatch;
@@ -225,18 +221,7 @@ const RegisterScreen = ({ navigation }) => {
         </View>
       </ScrollView>
 
-      {/* Snackbar */}
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={4000}
-        action={{
-          label: 'OK',
-          onPress: () => setSnackbarVisible(false),
-        }}
-      >
-        {snackbarMessage}
-      </Snackbar>
+      <Snackbar {...snackbar.snackbarProps} />
     </KeyboardAvoidingView>
   );
 };

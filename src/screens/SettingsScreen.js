@@ -20,6 +20,7 @@ import {
 } from 'react-native-paper';
 import theme from '../theme';
 import { useAuth } from '../context/AuthContext';
+import { useSnackbar } from '../hooks/useSnackbar';
 import {
   loadUserProfile,
   saveUserProfile,
@@ -55,9 +56,7 @@ const SettingsScreen = ({ navigation }) => {
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [totalTrips, setTotalTrips] = useState(0);
 
-  // Snackbar
-  const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const snackbar = useSnackbar();
 
   useEffect(() => {
     loadAllData();
@@ -102,11 +101,11 @@ const SettingsScreen = ({ navigation }) => {
     setProfileSaving(false);
 
     if (success) {
-      setSnackbarMessage('Profil erfolgreich gespeichert.');
-      setSnackbarVisible(true);
+      snackbar.show('Profil erfolgreich gespeichert.');
+
     } else {
-      setSnackbarMessage('Fehler beim Speichern des Profils.');
-      setSnackbarVisible(true);
+      snackbar.show('Fehler beim Speichern des Profils.');
+
     }
   };
 
@@ -156,11 +155,11 @@ const SettingsScreen = ({ navigation }) => {
               setCurrency('EUR');
               setTotalExpenses(0);
               setTotalTrips(0);
-              setSnackbarMessage('Alle Daten wurden gelöscht.');
-              setSnackbarVisible(true);
+              snackbar.show('Alle Daten wurden gelöscht.');
+        
             } else {
-              setSnackbarMessage('Fehler beim Löschen der Daten.');
-              setSnackbarVisible(true);
+              snackbar.show('Fehler beim Löschen der Daten.');
+        
             }
           },
         },
@@ -180,8 +179,8 @@ const SettingsScreen = ({ navigation }) => {
           onPress: async () => {
             const result = await logout();
             if (!result.success) {
-              setSnackbarMessage(result.error || 'Fehler beim Abmelden');
-              setSnackbarVisible(true);
+              snackbar.show(result.error || 'Fehler beim Abmelden');
+        
             }
             // Bei Erfolg navigiert AuthContext automatisch zum Login
           },
@@ -520,17 +519,7 @@ const SettingsScreen = ({ navigation }) => {
         </Surface>
       </ScrollView>
 
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
-        action={{
-          label: 'OK',
-          onPress: () => setSnackbarVisible(false),
-        }}
-      >
-        {snackbarMessage}
-      </Snackbar>
+      <Snackbar {...snackbar.snackbarProps} />
     </KeyboardAvoidingView>
   );
 };

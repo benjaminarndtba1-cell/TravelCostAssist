@@ -16,19 +16,19 @@ import {
   Snackbar
 } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
+import { useSnackbar } from '../hooks/useSnackbar';
 
 const ForgotPasswordScreen = ({ navigation, route }) => {
   const [email, setEmail] = useState(route.params?.email || '');
-  const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
 
   const { resetPassword } = useAuth();
+  const snackbar = useSnackbar(4000);
 
   const handleResetPassword = async () => {
     if (!email.trim()) {
-      showSnackbar('Bitte E-Mail-Adresse eingeben');
+      snackbar.show('Bitte E-Mail-Adresse eingeben');
       return;
     }
 
@@ -40,16 +40,12 @@ const ForgotPasswordScreen = ({ navigation, route }) => {
 
     if (result.success) {
       setEmailSent(true);
-      showSnackbar('Passwort-Reset-E-Mail wurde versendet!');
+      snackbar.show('Passwort-Reset-E-Mail wurde versendet!');
     } else {
-      showSnackbar(result.error || 'Fehler beim Versenden der E-Mail');
+      snackbar.show(result.error || 'Fehler beim Versenden der E-Mail');
     }
   };
 
-  const showSnackbar = (message) => {
-    setSnackbarMessage(message);
-    setSnackbarVisible(true);
-  };
 
   return (
     <KeyboardAvoidingView
@@ -124,17 +120,7 @@ const ForgotPasswordScreen = ({ navigation, route }) => {
         </View>
       </ScrollView>
 
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={4000}
-        action={{
-          label: 'OK',
-          onPress: () => setSnackbarVisible(false),
-        }}
-      >
-        {snackbarMessage}
-      </Snackbar>
+      <Snackbar {...snackbar.snackbarProps} />
     </KeyboardAvoidingView>
   );
 };

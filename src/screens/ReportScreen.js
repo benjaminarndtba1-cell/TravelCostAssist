@@ -16,10 +16,9 @@ import {
 } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
 import theme from '../theme';
-import { formatCurrency } from '../utils/formatting';
+import { formatCurrency, formatDateDE } from '../utils/formatting';
+import { useSnackbar } from '../hooks/useSnackbar';
 import {
   loadTrips,
   loadExpenses,
@@ -51,8 +50,7 @@ const ReportScreen = () => {
   // UI state
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const snackbar = useSnackbar(4000);
 
   // Load base data on focus
   useFocusEffect(
@@ -118,10 +116,7 @@ const ReportScreen = () => {
 
   const handleGeneratePDF = async () => {
     if (filteredTrips.length === 0) {
-      setSnackbarMessage(
-        'Keine Reisen im gewählten Zeitraum gefunden.'
-      );
-      setSnackbarVisible(true);
+      snackbar.show('Keine Reisen im gewählten Zeitraum gefunden.');
       return;
     }
 
@@ -134,13 +129,9 @@ const ReportScreen = () => {
         startDate,
         endDate,
       });
-      setSnackbarMessage('PDF wurde erfolgreich erstellt.');
-      setSnackbarVisible(true);
+      snackbar.show('PDF wurde erfolgreich erstellt.');
     } catch (error) {
-      setSnackbarMessage(
-        'Fehler beim Erstellen der PDF: ' + error.message
-      );
-      setSnackbarVisible(true);
+      snackbar.show('Fehler beim Erstellen der PDF: ' + error.message);
     }
     setGenerating(false);
   };
@@ -191,7 +182,7 @@ const ReportScreen = () => {
                 textColor={theme.colors.text}
                 compact
               >
-                {format(startDate, 'dd.MM.yyyy', { locale: de })}
+                {formatDateDE(startDate, 'dd.MM.yyyy')}
               </Button>
             </View>
             <View style={styles.dateField}>
@@ -206,7 +197,7 @@ const ReportScreen = () => {
                 textColor={theme.colors.text}
                 compact
               >
-                {format(endDate, 'dd.MM.yyyy', { locale: de })}
+                {formatDateDE(endDate, 'dd.MM.yyyy')}
               </Button>
             </View>
           </View>
@@ -356,17 +347,9 @@ const ReportScreen = () => {
                         {trip.destination
                           ? trip.destination + ' · '
                           : ''}
-                        {format(
-                          new Date(trip.startDateTime),
-                          'dd.MM.',
-                          { locale: de }
-                        )}
+                        {formatDateDE(trip.startDateTime, 'dd.MM.')}
                         &ndash;
-                        {format(
-                          new Date(trip.endDateTime),
-                          'dd.MM.yyyy',
-                          { locale: de }
-                        )}
+                        {formatDateDE(trip.endDateTime, 'dd.MM.yyyy')}
                       </Text>
                       <Text
                         variant="bodySmall"
@@ -427,17 +410,7 @@ const ReportScreen = () => {
         )}
       </ScrollView>
 
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={4000}
-        action={{
-          label: 'OK',
-          onPress: () => setSnackbarVisible(false),
-        }}
-      >
-        {snackbarMessage}
-      </Snackbar>
+      <Snackbar {...snackbar.snackbarProps} />
     </View>
   );
 };
