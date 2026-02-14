@@ -1,24 +1,20 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Card, Text, Icon, Chip } from 'react-native-paper';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
 import { getCategoryById } from '../utils/categories';
 import { getVatRateById } from '../utils/vatRates';
+import { formatCurrency, formatDateDE } from '../utils/formatting';
 import theme from '../theme';
 
 const ExpenseCard = ({ expense, onPress, onLongPress }) => {
   const category = getCategoryById(expense.category);
 
   const formattedDate = expense.date
-    ? format(new Date(expense.date), 'dd. MMM yyyy', { locale: de })
+    ? formatDateDE(expense.date, 'dd. MMM yyyy')
     : '';
 
   const grossAmount = parseFloat(expense.grossAmount || expense.amount) || 0;
-  const formattedAmount = new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: expense.currency || 'EUR',
-  }).format(grossAmount);
+  const formattedAmount = formatCurrency(grossAmount, expense.currency || 'EUR');
 
   const vatRate = expense.vatRateId ? getVatRateById(expense.vatRateId) : null;
   const receiptCount = expense.receiptUris
@@ -194,4 +190,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ExpenseCard;
+export default React.memo(ExpenseCard);

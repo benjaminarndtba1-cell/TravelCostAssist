@@ -19,6 +19,7 @@ import {
   Icon,
   Snackbar,
   Divider,
+  Chip,
 } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -28,7 +29,7 @@ import { de } from 'date-fns/locale';
 const generateId = () =>
   Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
 import theme from '../theme';
-import { loadTrips, addTrip, deleteTrip, loadExpenses } from '../utils/storage';
+import { loadTrips, addTrip, deleteTrip, updateTrip, loadExpenses } from '../utils/storage';
 import { TRIP_STATUS } from '../utils/categories';
 import { calculateMealAllowances, formatAbsenceDuration } from '../utils/verpflegungspauschalen';
 import TripCard from '../components/TripCard';
@@ -45,6 +46,7 @@ const TripsScreen = ({ navigation }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
 
   // New trip form state
   const [tripName, setTripName] = useState('');
@@ -182,6 +184,52 @@ const TripsScreen = ({ navigation }) => {
     }
   };
 
+  const filteredTrips = useMemo(() => {
+    return trips.filter((t) => showArchived ? t.isArchived : !t.isArchived);
+  }, [trips, showArchived]);
+
+  const archivedCount = useMemo(() => {
+    return trips.filter((t) => t.isArchived).length;
+  }, [trips]);
+
+  const handleArchiveTrip = (trip) => {
+    Alert.alert(
+      'Reise archivieren',
+      `Möchten Sie die Reise "${trip.name}" archivieren? Sie wird aus der Übersicht ausgeblendet, bleibt aber gespeichert.`,
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Archivieren',
+          onPress: async () => {
+            await updateTrip(trip.id, { isArchived: true });
+            setSnackbarMessage('Reise wurde archiviert.');
+            setSnackbarVisible(true);
+            await loadData();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRestoreTrip = (trip) => {
+    Alert.alert(
+      'Reise wiederherstellen',
+      `Möchten Sie die Reise "${trip.name}" wiederherstellen?`,
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Wiederherstellen',
+          onPress: async () => {
+            await updateTrip(trip.id, { isArchived: false });
+            setSnackbarMessage('Reise wurde wiederhergestellt.');
+            setSnackbarVisible(true);
+            await loadData();
+          },
+        },
+      ]
+    );
+  };
+
   const handleDeleteTrip = (trip) => {
     Alert.alert(
       'Reise l\u00f6schen',
@@ -237,44 +285,67 @@ const TripsScreen = ({ navigation }) => {
 
   const renderEmptyList = () => (
     <View style={styles.emptyContainer}>
-      <Icon source="airplane-off" size={64} color={theme.colors.textLight} />
+      <Icon source={showArchived ? 'archive-off-outline' : 'airplane-off'} size={64} color={theme.colors.textLight} />
       <Text variant="titleMedium" style={styles.emptyTitle}>
-        Keine Reisen vorhanden
+        {showArchived ? 'Keine archivierten Reisen' : 'Keine Reisen vorhanden'}
       </Text>
       <Text variant="bodyMedium" style={styles.emptyText}>
-        {'Erstellen Sie Ihre erste Dienstreise, um Ausgaben erfassen zu k\u00f6nnen.'}
+        {showArchived
+          ? 'Abgeschlossene Reisen können über die Detailansicht archiviert werden.'
+          : 'Erstellen Sie Ihre erste Dienstreise, um Ausgaben erfassen zu können.'}
       </Text>
     </View>
   );
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <Text variant="titleMedium" style={styles.headerTitle}>
-        Ihre Dienstreisen
-      </Text>
-      <Text variant="bodySmall" style={styles.headerSubtitle}>
-        {trips.length} {trips.length === 1 ? 'Reise' : 'Reisen'} gesamt
-      </Text>
+      <View style={styles.headerRow}>
+        <View>
+          <Text variant="titleMedium" style={styles.headerTitle}>
+            {showArchived ? 'Archivierte Reisen' : 'Ihre Dienstreisen'}
+          </Text>
+          <Text variant="bodySmall" style={styles.headerSubtitle}>
+            {filteredTrips.length} {filteredTrips.length === 1 ? 'Reise' : 'Reisen'}
+          </Text>
+        </View>
+        {archivedCount > 0 || showArchived ? (
+          <Chip
+            icon={showArchived ? 'briefcase-outline' : 'archive-outline'}
+            onPress={() => setShowArchived(!showArchived)}
+            compact
+            style={styles.archiveToggle}
+            textStyle={styles.archiveToggleText}
+          >
+            {showArchived ? 'Aktive' : `Archiv (${archivedCount})`}
+          </Chip>
+        ) : null}
+      </View>
     </View>
   );
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={trips}
+        data={filteredTrips}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <TripCard
             trip={item}
-            onPress={() => navigation.navigate('TripDetail', { tripId: item.id })}
+            onPress={() => showArchived
+              ? handleRestoreTrip(item)
+              : navigation.navigate('TripDetail', {
+                  tripId: item.id,
+                  editMode: item.status !== TRIP_STATUS.COMPLETED && item.status !== TRIP_STATUS.SUBMITTED && item.status !== TRIP_STATUS.APPROVED,
+                })
+            }
             onLongPress={() => handleDeleteTrip(item)}
           />
         )}
-        ListHeaderComponent={trips.length > 0 ? renderHeader : null}
+        ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmptyList}
         contentContainerStyle={[
           styles.listContent,
-          trips.length === 0 && styles.listContentEmpty,
+          filteredTrips.length === 0 && styles.listContentEmpty,
         ]}
         refreshControl={
           <RefreshControl
@@ -521,16 +592,18 @@ const TripsScreen = ({ navigation }) => {
         {snackbarMessage}
       </Snackbar>
 
-      <FAB
-        icon="plus"
-        style={styles.fab}
-        color="#FFFFFF"
-        onPress={() => {
-          resetForm();
-          setModalVisible(true);
-        }}
-        label="Neue Reise"
-      />
+      {!showArchived ? (
+        <FAB
+          icon="plus"
+          style={styles.fab}
+          color="#FFFFFF"
+          onPress={() => {
+            resetForm();
+            setModalVisible(true);
+          }}
+          label="Neue Reise"
+        />
+      ) : null}
     </View>
   );
 };
@@ -552,6 +625,11 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.sm,
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: {
     color: theme.colors.text,
     fontWeight: '600',
@@ -559,6 +637,14 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     color: theme.colors.textLight,
     marginTop: 2,
+  },
+  archiveToggle: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  archiveToggleText: {
+    fontSize: 12,
   },
   emptyContainer: {
     alignItems: 'center',

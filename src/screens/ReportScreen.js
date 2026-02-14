@@ -19,6 +19,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import theme from '../theme';
+import { formatCurrency } from '../utils/formatting';
 import {
   loadTrips,
   loadExpenses,
@@ -63,12 +64,6 @@ const ReportScreen = () => {
       loadBase();
     }, [])
   );
-
-  const formatCurrency = (amount) =>
-    new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(amount);
 
   const handleSearch = async () => {
     setLoading(true);

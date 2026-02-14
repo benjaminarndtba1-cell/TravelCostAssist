@@ -1,10 +1,15 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   StyleSheet,
   FlatList,
   RefreshControl,
   Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import {
   Text,
@@ -14,22 +19,83 @@ import {
   Button,
   Divider,
   FAB,
+  TextInput,
+  Snackbar,
 } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import theme from '../theme';
 import { loadTrips, loadExpenses, deleteExpense, updateTrip } from '../utils/storage';
 import { TRIP_STATUS, TRIP_STATUS_LABELS, TRIP_STATUS_COLORS } from '../utils/categories';
 import { getVatRateById } from '../utils/vatRates';
-import { formatAbsenceDuration } from '../utils/verpflegungspauschalen';
+import { calculateMealAllowances, formatAbsenceDuration } from '../utils/verpflegungspauschalen';
+import { formatCurrency, formatDateDE } from '../utils/formatting';
 import ExpenseCard from '../components/ExpenseCard';
 
+const combineDateAndTime = (date, time) => {
+  const combined = new Date(date);
+  combined.setHours(time.getHours(), time.getMinutes(), 0, 0);
+  return combined;
+};
+
 const TripDetailScreen = ({ route, navigation }) => {
-  const { tripId } = route.params;
+  const { tripId, editMode } = route.params;
   const [trip, setTrip] = useState(null);
   const [expenses, setExpenses] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Edit modal state
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDestination, setEditDestination] = useState('');
+  const [editCompany, setEditCompany] = useState('');
+  const [editContact, setEditContact] = useState('');
+  const [editStartDate, setEditStartDate] = useState(new Date());
+  const [editEndDate, setEditEndDate] = useState(new Date());
+  const [editStartTime, setEditStartTime] = useState(new Date());
+  const [editEndTime, setEditEndTime] = useState(new Date());
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [editModalOpened, setEditModalOpened] = useState(false);
+
+  // Preview of meal allowances based on current date/time selection in edit modal
+  const editMealAllowancePreview = useMemo(() => {
+    const start = combineDateAndTime(editStartDate, editStartTime);
+    const end = combineDateAndTime(editEndDate, editEndTime);
+    if (end <= start) return null;
+    return calculateMealAllowances(start.toISOString(), end.toISOString());
+  }, [editStartDate, editStartTime, editEndDate, editEndTime]);
+
+  const editAbsenceDurationText = useMemo(() => {
+    const start = combineDateAndTime(editStartDate, editStartTime);
+    const end = combineDateAndTime(editEndDate, editEndTime);
+    const diffMs = end - start;
+    if (diffMs <= 0) return null;
+    const hours = diffMs / (1000 * 60 * 60);
+    return formatAbsenceDuration(hours);
+  }, [editStartDate, editStartTime, editEndDate, editEndTime]);
+
+  const openEditModal = useCallback((tripData) => {
+    if (!tripData) return;
+    setEditName(tripData.name || '');
+    setEditDestination(tripData.destination || '');
+    setEditCompany(tripData.company || '');
+    setEditContact(tripData.contact || '');
+    const startDt = tripData.startDateTime ? new Date(tripData.startDateTime) : new Date();
+    const endDt = tripData.endDateTime ? new Date(tripData.endDateTime) : new Date();
+    setEditStartDate(startDt);
+    setEditEndDate(endDt);
+    setEditStartTime(startDt);
+    setEditEndTime(endDt);
+    setEditModalVisible(true);
+  }, []);
 
   const loadData = useCallback(async () => {
     const allTrips = await loadTrips();
@@ -52,6 +118,101 @@ const TripDetailScreen = ({ route, navigation }) => {
     }, [loadData])
   );
 
+  // Auto-open edit modal when navigated with editMode
+  useEffect(() => {
+    if (editMode && trip && !editModalOpened) {
+      const canEdit = trip.status !== TRIP_STATUS.COMPLETED
+        && trip.status !== TRIP_STATUS.SUBMITTED
+        && trip.status !== TRIP_STATUS.APPROVED;
+      if (canEdit) {
+        setEditModalOpened(true);
+        openEditModal(trip);
+      }
+    }
+  }, [editMode, trip, editModalOpened, openEditModal]);
+
+  const handleSaveTrip = async () => {
+    if (!editName.trim()) {
+      Alert.alert('Fehlende Eingabe', 'Bitte geben Sie einen Reisenamen ein.');
+      return;
+    }
+
+    const startDateTime = combineDateAndTime(editStartDate, editStartTime);
+    const endDateTime = combineDateAndTime(editEndDate, editEndTime);
+
+    if (endDateTime <= startDateTime) {
+      Alert.alert('Ungültige Zeiten', 'Das Reiseende muss nach dem Reisebeginn liegen.');
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const mealAllowances = calculateMealAllowances(
+        startDateTime.toISOString(),
+        endDateTime.toISOString()
+      );
+
+      const updatedData = {
+        name: editName.trim(),
+        destination: editDestination.trim(),
+        company: editCompany.trim(),
+        contact: editContact.trim(),
+        startDateTime: startDateTime.toISOString(),
+        endDateTime: endDateTime.toISOString(),
+        mealAllowances,
+      };
+
+      const success = await updateTrip(tripId, updatedData);
+
+      if (success) {
+        setEditModalVisible(false);
+        setSnackbarMessage('Reisedaten erfolgreich aktualisiert!');
+        setSnackbarVisible(true);
+        await loadData();
+      } else {
+        Alert.alert('Fehler', 'Fehler beim Speichern der Reisedaten.');
+      }
+    } catch (error) {
+      console.error('Fehler beim Speichern der Reise:', error);
+      Alert.alert('Fehler', `Reise konnte nicht gespeichert werden: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Date picker handlers for edit modal
+  const onEditStartDateChange = (event, selectedDate) => {
+    setShowStartDatePicker(false);
+    if (selectedDate) {
+      setEditStartDate(selectedDate);
+      if (selectedDate > editEndDate) {
+        setEditEndDate(selectedDate);
+      }
+    }
+  };
+
+  const onEditEndDateChange = (event, selectedDate) => {
+    setShowEndDatePicker(false);
+    if (selectedDate) {
+      setEditEndDate(selectedDate);
+    }
+  };
+
+  const onEditStartTimeChange = (event, selectedTime) => {
+    setShowStartTimePicker(false);
+    if (selectedTime) {
+      setEditStartTime(selectedTime);
+    }
+  };
+
+  const onEditEndTimeChange = (event, selectedTime) => {
+    setShowEndTimePicker(false);
+    if (selectedTime) {
+      setEditEndTime(selectedTime);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadData();
@@ -59,6 +220,7 @@ const TripDetailScreen = ({ route, navigation }) => {
   };
 
   const isCompleted = trip?.status === TRIP_STATUS.COMPLETED;
+  const isEditable = trip?.status === TRIP_STATUS.DRAFT || trip?.status === TRIP_STATUS.REJECTED;
 
   const handleEditExpense = (expense) => {
     if (isCompleted) {
@@ -184,6 +346,44 @@ const TripDetailScreen = ({ route, navigation }) => {
     );
   };
 
+  const handleArchiveTrip = () => {
+    Alert.alert(
+      'Reise archivieren',
+      'Die Reise wird aus der Übersicht ausgeblendet, bleibt aber gespeichert und kann jederzeit wiederhergestellt werden.',
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Archivieren',
+          onPress: async () => {
+            await updateTrip(tripId, { isArchived: true });
+            setSnackbarMessage('Reise wurde archiviert.');
+            setSnackbarVisible(true);
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRestoreTrip = () => {
+    Alert.alert(
+      'Reise wiederherstellen',
+      'Möchten Sie diese Reise aus dem Archiv wiederherstellen?',
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Wiederherstellen',
+          onPress: async () => {
+            await updateTrip(tripId, { isArchived: false });
+            setSnackbarMessage('Reise wurde wiederhergestellt.');
+            setSnackbarVisible(true);
+            await loadData();
+          },
+        },
+      ]
+    );
+  };
+
   if (!trip) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -207,16 +407,13 @@ const TripDetailScreen = ({ route, navigation }) => {
   const mealAllowanceTotal = trip.mealAllowances ? trip.mealAllowances.totalAmount : 0;
   const grandTotal = totalGross + mealAllowanceTotal;
 
-  const formatCurrency = (amount) =>
-    new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
-
   const startDate = trip.startDateTime || trip.startDate;
   const endDate = trip.endDateTime || trip.endDate;
   const formattedStart = startDate
-    ? format(new Date(startDate), 'dd.MM.yyyy HH:mm', { locale: de })
+    ? formatDateDE(startDate, 'dd.MM.yyyy HH:mm')
     : '';
   const formattedEnd = endDate
-    ? format(new Date(endDate), 'dd.MM.yyyy HH:mm', { locale: de })
+    ? formatDateDE(endDate, 'dd.MM.yyyy HH:mm')
     : '';
 
   const statusLabel = TRIP_STATUS_LABELS[trip.status] || trip.status;
@@ -248,6 +445,19 @@ const TripDetailScreen = ({ route, navigation }) => {
             {statusLabel}
           </Chip>
         </View>
+
+        {isEditable ? (
+          <Button
+            mode="outlined"
+            icon="pencil"
+            onPress={() => openEditModal(trip)}
+            style={styles.editButton}
+            textColor={theme.colors.primary}
+            compact
+          >
+            Reisedaten bearbeiten
+          </Button>
+        ) : null}
 
         <Divider style={styles.divider} />
 
@@ -294,7 +504,7 @@ const TripDetailScreen = ({ route, navigation }) => {
             <View key={index} style={styles.allowanceRow}>
               <View style={{ flex: 1 }}>
                 <Text variant="bodySmall" style={styles.allowanceDate}>
-                  {format(new Date(day.date), 'dd.MM.yyyy (EEEE)', { locale: de })}
+                  {formatDateDE(day.date, 'dd.MM.yyyy (EEEE)')}
                 </Text>
                 <Text variant="bodySmall" style={styles.allowanceType}>
                   {day.label}
@@ -381,7 +591,7 @@ const TripDetailScreen = ({ route, navigation }) => {
           </Button>
         </View>
       ) : null}
-      {trip.status === TRIP_STATUS.COMPLETED ? (
+      {trip.status === TRIP_STATUS.COMPLETED && !trip.isArchived ? (
         <View style={styles.actionButtons}>
           <Button
             mode="outlined"
@@ -391,6 +601,29 @@ const TripDetailScreen = ({ route, navigation }) => {
             textColor={theme.colors.textSecondary}
           >
             Reise wieder öffnen
+          </Button>
+          <Button
+            mode="outlined"
+            icon="archive-arrow-down-outline"
+            onPress={handleArchiveTrip}
+            style={styles.submitButton}
+            textColor={theme.colors.textSecondary}
+          >
+            Reise archivieren
+          </Button>
+        </View>
+      ) : null}
+      {trip.isArchived ? (
+        <View style={styles.actionButtons}>
+          <Button
+            mode="contained"
+            icon="archive-arrow-up-outline"
+            onPress={handleRestoreTrip}
+            style={styles.submitButton}
+            buttonColor={theme.colors.primary}
+            textColor="#FFFFFF"
+          >
+            Aus Archiv wiederherstellen
           </Button>
         </View>
       ) : null}
@@ -452,6 +685,241 @@ const TripDetailScreen = ({ route, navigation }) => {
           onPress={handleAddExpense}
         />
       ) : null}
+
+      {/* Edit Trip Modal */}
+      <Modal
+        visible={editModalVisible}
+        onRequestClose={() => setEditModalVisible(false)}
+        transparent={true}
+        animationType="slide"
+        statusBarTranslucent={true}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setEditModalVisible(false)}
+          />
+          <View style={styles.modalContainer}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
+              <ScrollView keyboardShouldPersistTaps="handled">
+                <View style={styles.modalHeader}>
+                  <Text variant="titleLarge" style={styles.modalTitle}>
+                    Reisedaten bearbeiten
+                  </Text>
+                  <Text variant="bodySmall" style={styles.modalSubtitle}>
+                    Ändern Sie die Eckdaten Ihrer Dienstreise
+                  </Text>
+                </View>
+
+                <Divider style={styles.modalDivider} />
+
+                <View style={styles.modalBody}>
+                  <TextInput
+                    mode="outlined"
+                    label="Reisename *"
+                    placeholder="z.B. Kundentermin München"
+                    value={editName}
+                    onChangeText={setEditName}
+                    left={<TextInput.Icon icon="briefcase" />}
+                    style={styles.modalInput}
+                    outlineColor={theme.colors.border}
+                    activeOutlineColor={theme.colors.primary}
+                  />
+
+                  <TextInput
+                    mode="outlined"
+                    label="Reiseziel"
+                    placeholder="z.B. München"
+                    value={editDestination}
+                    onChangeText={setEditDestination}
+                    left={<TextInput.Icon icon="map-marker" />}
+                    style={styles.modalInput}
+                    outlineColor={theme.colors.border}
+                    activeOutlineColor={theme.colors.primary}
+                  />
+
+                  <TextInput
+                    mode="outlined"
+                    label="Firma"
+                    placeholder="z.B. Musterfirma GmbH"
+                    value={editCompany}
+                    onChangeText={setEditCompany}
+                    left={<TextInput.Icon icon="office-building" />}
+                    style={styles.modalInput}
+                    outlineColor={theme.colors.border}
+                    activeOutlineColor={theme.colors.primary}
+                  />
+
+                  <TextInput
+                    mode="outlined"
+                    label="Ansprechpartner"
+                    placeholder="z.B. Max Mustermann"
+                    value={editContact}
+                    onChangeText={setEditContact}
+                    left={<TextInput.Icon icon="account" />}
+                    style={styles.modalInput}
+                    outlineColor={theme.colors.border}
+                    activeOutlineColor={theme.colors.primary}
+                  />
+
+                  {/* Start Date and Time */}
+                  <Text variant="bodySmall" style={styles.dateLabel}>
+                    Reisebeginn
+                  </Text>
+                  <View style={styles.dateTimeRow}>
+                    <Button
+                      mode="outlined"
+                      icon="calendar"
+                      onPress={() => setShowStartDatePicker(true)}
+                      style={styles.dateButton}
+                      textColor={theme.colors.text}
+                    >
+                      {format(editStartDate, 'dd.MM.yyyy', { locale: de })}
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      icon="clock-outline"
+                      onPress={() => setShowStartTimePicker(true)}
+                      style={styles.timeButton}
+                      textColor={theme.colors.text}
+                    >
+                      {format(editStartTime, 'HH:mm', { locale: de })}
+                    </Button>
+                  </View>
+                  {showStartDatePicker && (
+                    <DateTimePicker
+                      value={editStartDate}
+                      mode="date"
+                      display="default"
+                      onChange={onEditStartDateChange}
+                      locale="de-DE"
+                    />
+                  )}
+                  {showStartTimePicker && (
+                    <DateTimePicker
+                      value={editStartTime}
+                      mode="time"
+                      display="default"
+                      onChange={onEditStartTimeChange}
+                      locale="de-DE"
+                      is24Hour={true}
+                    />
+                  )}
+
+                  {/* End Date and Time */}
+                  <Text variant="bodySmall" style={styles.dateLabel}>
+                    Reiseende
+                  </Text>
+                  <View style={styles.dateTimeRow}>
+                    <Button
+                      mode="outlined"
+                      icon="calendar"
+                      onPress={() => setShowEndDatePicker(true)}
+                      style={styles.dateButton}
+                      textColor={theme.colors.text}
+                    >
+                      {format(editEndDate, 'dd.MM.yyyy', { locale: de })}
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      icon="clock-outline"
+                      onPress={() => setShowEndTimePicker(true)}
+                      style={styles.timeButton}
+                      textColor={theme.colors.text}
+                    >
+                      {format(editEndTime, 'HH:mm', { locale: de })}
+                    </Button>
+                  </View>
+                  {showEndDatePicker && (
+                    <DateTimePicker
+                      value={editEndDate}
+                      mode="date"
+                      display="default"
+                      onChange={onEditEndDateChange}
+                      locale="de-DE"
+                      minimumDate={editStartDate}
+                    />
+                  )}
+                  {showEndTimePicker && (
+                    <DateTimePicker
+                      value={editEndTime}
+                      mode="time"
+                      display="default"
+                      onChange={onEditEndTimeChange}
+                      locale="de-DE"
+                      is24Hour={true}
+                    />
+                  )}
+
+                  {/* Absence duration and Verpflegungspauschale preview */}
+                  {editAbsenceDurationText && (
+                    <View style={styles.previewContainer}>
+                      <Divider style={styles.previewDivider} />
+                      <View style={styles.previewRow}>
+                        <Icon source="clock-outline" size={18} color={theme.colors.textSecondary} />
+                        <Text variant="bodySmall" style={styles.previewLabel}>
+                          Abwesenheitsdauer
+                        </Text>
+                        <Text variant="bodyMedium" style={styles.previewValue}>
+                          {editAbsenceDurationText}
+                        </Text>
+                      </View>
+                      {editMealAllowancePreview && (
+                        <View style={styles.previewRow}>
+                          <Icon source="food-fork-drink" size={18} color={theme.colors.accent} />
+                          <Text variant="bodySmall" style={styles.previewLabel}>
+                            Verpflegungspauschale
+                          </Text>
+                          <Text variant="bodyMedium" style={styles.previewValueHighlight}>
+                            {editMealAllowancePreview.formattedTotal}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+
+                <Divider style={styles.modalDivider} />
+
+                <View style={styles.modalActions}>
+                  <Button
+                    mode="text"
+                    onPress={() => setEditModalVisible(false)}
+                    textColor={theme.colors.textSecondary}
+                  >
+                    Abbrechen
+                  </Button>
+                  <Button
+                    mode="contained"
+                    onPress={handleSaveTrip}
+                    loading={saving}
+                    disabled={saving}
+                    buttonColor={theme.colors.primary}
+                    textColor="#FFFFFF"
+                    icon="check"
+                  >
+                    Speichern
+                  </Button>
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
+          </View>
+        </View>
+      </Modal>
+
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={3000}
+        action={{
+          label: 'OK',
+          onPress: () => setSnackbarVisible(false),
+        }}
+      >
+        {snackbarMessage}
+      </Snackbar>
     </View>
   );
 };
@@ -645,6 +1113,100 @@ const styles = StyleSheet.create({
     bottom: 16,
     backgroundColor: theme.colors.primary,
     borderRadius: 28,
+  },
+  editButton: {
+    marginTop: theme.spacing.sm,
+    borderColor: theme.colors.primary,
+    borderRadius: theme.roundness,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.md,
+  },
+  modalContainer: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.roundness * 2,
+    overflow: 'hidden',
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    padding: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
+  },
+  modalTitle: {
+    color: theme.colors.text,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    color: theme.colors.textSecondary,
+    marginTop: 4,
+  },
+  modalDivider: {
+    backgroundColor: theme.colors.divider,
+  },
+  modalBody: {
+    padding: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.md,
+  },
+  modalInput: {
+    backgroundColor: theme.colors.surface,
+    marginBottom: theme.spacing.sm + 4,
+  },
+  dateLabel: {
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.xs,
+    marginTop: theme.spacing.xs,
+    fontWeight: '500',
+  },
+  dateTimeRow: {
+    flexDirection: 'row',
+    marginBottom: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  dateButton: {
+    flex: 1,
+    borderColor: theme.colors.border,
+    justifyContent: 'flex-start',
+  },
+  timeButton: {
+    flex: 0,
+    minWidth: 110,
+    borderColor: theme.colors.border,
+    justifyContent: 'flex-start',
+  },
+  previewContainer: {
+    marginTop: theme.spacing.sm,
+  },
+  previewDivider: {
+    backgroundColor: theme.colors.divider,
+    marginBottom: theme.spacing.sm,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.xs + 2,
+  },
+  previewLabel: {
+    color: theme.colors.textSecondary,
+    marginLeft: theme.spacing.sm,
+    flex: 1,
+  },
+  previewValue: {
+    color: theme.colors.text,
+    fontWeight: '600',
+  },
+  previewValueHighlight: {
+    color: theme.colors.accent,
+    fontWeight: '700',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
 });
 

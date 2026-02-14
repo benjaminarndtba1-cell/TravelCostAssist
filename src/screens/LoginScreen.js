@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image
 } from 'react-native';
 import {
   TextInput,

@@ -1,9 +1,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Card, Text, Chip, Icon } from 'react-native-paper';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
 import { TRIP_STATUS_LABELS, TRIP_STATUS_COLORS } from '../utils/categories';
+import { formatCurrency, formatDateDE } from '../utils/formatting';
 import theme from '../theme';
 
 const TripCard = ({ trip, onPress, onLongPress }) => {
@@ -14,10 +13,10 @@ const TripCard = ({ trip, onPress, onLongPress }) => {
   const endDate = trip.endDateTime || trip.endDate;
 
   const formattedStartDate = startDate
-    ? format(new Date(startDate), 'dd.MM.yyyy HH:mm', { locale: de })
+    ? formatDateDE(startDate, 'dd.MM.yyyy HH:mm')
     : '';
   const formattedEndDate = endDate
-    ? format(new Date(endDate), 'dd.MM.yyyy HH:mm', { locale: de })
+    ? formatDateDE(endDate, 'dd.MM.yyyy HH:mm')
     : '';
 
   const dateRange =
@@ -25,18 +24,12 @@ const TripCard = ({ trip, onPress, onLongPress }) => {
       ? `${formattedStartDate} – ${formattedEndDate}`
       : formattedStartDate || 'Kein Datum';
 
-  const formattedTotal = new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: trip.currency || 'EUR',
-  }).format(trip.totalAmount || 0);
+  const formattedTotal = formatCurrency(trip.totalAmount || 0, trip.currency || 'EUR');
 
   const expenseCount = trip.expenseCount || 0;
   const mealAllowanceTotal = trip.mealAllowancesTotal || (trip.mealAllowances ? trip.mealAllowances.totalAmount : 0);
 
-  const formattedMealAllowance = new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(mealAllowanceTotal);
+  const formattedMealAllowance = formatCurrency(mealAllowanceTotal);
 
   return (
     <Card style={styles.card} onPress={onPress} onLongPress={onLongPress} mode="elevated">
@@ -163,4 +156,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TripCard;
+export default React.memo(TripCard);

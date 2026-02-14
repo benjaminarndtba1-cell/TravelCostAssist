@@ -1,8 +1,7 @@
 // Firebase Configuration für TravelCostAssist
 //
-// WICHTIG: Ersetze die Platzhalter mit deinen echten Firebase-Werten!
-// Gehe zu: https://console.firebase.google.com/
-// → Projekt erstellen → Web-App hinzufügen → Config kopieren
+// API-Keys werden aus Umgebungsvariablen geladen (.env Datei).
+// Siehe .env.example für die benötigten Variablen.
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
@@ -10,14 +9,14 @@ import { getFirestore, enableIndexedDbPersistence, CACHE_SIZE_UNLIMITED } from '
 import { getStorage } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Firebase Configuration
+// Firebase Configuration aus Umgebungsvariablen (EXPO_PUBLIC_ Prefix)
 const firebaseConfig = {
-  apiKey: "AIzaSyCs0Li-_YDhflvN_ctMJKuyjrmAvdsE9Nk",
-  authDomain: "travelcostassist.firebaseapp.com",
-  projectId: "travelcostassist",
-  storageBucket: "travelcostassist.firebasestorage.app",
-  messagingSenderId: "892237387743",
-  appId: "1:892237387743:web:bc80d9c63bcb9307a6566a"
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
 // Firebase App initialisieren

@@ -1,6 +1,8 @@
 // Deutsche Verpflegungspauschalen (Stand 2024/2025)
 // § 9 Abs. 4a EStG - Inland
 
+import { formatCurrency } from './formatting';
+
 export const INLAND_RATES = {
   FULL_DAY: 28,       // Ab 24 Stunden Abwesenheit
   PARTIAL_DAY: 14,    // Mehr als 8 Stunden Abwesenheit
@@ -104,10 +106,7 @@ export const calculateMealAllowances = (startDateTime, endDateTime) => {
     calendarDays,
     breakdown,
     totalAmount,
-    formattedTotal: new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(totalAmount),
+    formattedTotal: formatCurrency(totalAmount),
   };
 };
 

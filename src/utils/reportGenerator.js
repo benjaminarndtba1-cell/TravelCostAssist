@@ -1,9 +1,8 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
 import { getCategoryLabel } from './categories';
 import { getVatRateById } from './vatRates';
+import { formatCurrency, formatDateDE } from './formatting';
 
 // ==========================================
 // Data Preparation
@@ -131,17 +130,9 @@ const loadReceiptImages = async (expenses) => {
 // HTML Template
 // ==========================================
 
-const formatCurrency = (amount) =>
-  new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(amount);
+const formatDate = (dateStr) => formatDateDE(dateStr);
 
-const formatDate = (dateStr) =>
-  format(new Date(dateStr), 'dd.MM.yyyy', { locale: de });
-
-const formatDateTime = (dateStr) =>
-  format(new Date(dateStr), 'dd.MM.yyyy HH:mm', { locale: de });
+const formatDateTime = (dateStr) => formatDateDE(dateStr, 'dd.MM.yyyy HH:mm');
 
 const escapeHtml = (str) => {
   if (!str) return '';

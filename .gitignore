@@ -16,6 +16,9 @@ android/
 .env.local
 .env.production
 
+# Credentials / Secrets
+credentials.json
+
 # IDE
 .vscode/
 .idea/

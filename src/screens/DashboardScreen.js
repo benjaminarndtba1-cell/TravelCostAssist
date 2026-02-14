@@ -2,10 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { Text, Card, Icon, FAB, Divider, Surface } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
 import theme from '../theme';
 import { loadExpenses, loadTrips } from '../utils/storage';
+import { formatCurrency, formatDateDE } from '../utils/formatting';
 import { getCategoryById } from '../utils/categories';
 import ExpenseCard from '../components/ExpenseCard';
 
@@ -58,10 +57,7 @@ const DashboardScreen = ({ navigation }) => {
     0
   );
 
-  const formattedTotal = new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(totalExpenses);
+  const formattedTotal = formatCurrency(totalExpenses);
 
   const thisMonthExpenses = expenses.filter((e) => {
     if (!e.date) return false;
@@ -78,12 +74,9 @@ const DashboardScreen = ({ navigation }) => {
     0
   );
 
-  const formattedMonthTotal = new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(thisMonthTotal);
+  const formattedMonthTotal = formatCurrency(thisMonthTotal);
 
-  const currentMonthName = format(new Date(), 'MMMM yyyy', { locale: de });
+  const currentMonthName = formatDateDE(new Date(), 'MMMM yyyy');
 
   const recentExpenses = expenses.slice(0, 10);
 
@@ -175,10 +168,7 @@ const DashboardScreen = ({ navigation }) => {
                 {currentTrip.expenseCount === 1 ? 'Ausgabe' : 'Ausgaben'}
               </Text>
               <Text variant="titleMedium" style={styles.currentTripTotal}>
-                {new Intl.NumberFormat('de-DE', {
-                  style: 'currency',
-                  currency: 'EUR',
-                }).format(currentTrip.totalAmount)}
+                {formatCurrency(currentTrip.totalAmount)}
               </Text>
             </View>
           </Card.Content>

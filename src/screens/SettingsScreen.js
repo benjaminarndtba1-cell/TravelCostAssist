@@ -28,7 +28,7 @@ import {
   clearAllData,
   loadExpenses,
   loadTrips,
-} from '../utils/firebaseStorage';
+} from '../utils/storage';
 
 const SettingsScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
