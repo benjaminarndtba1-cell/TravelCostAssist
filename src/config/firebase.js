@@ -5,7 +5,7 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentSingleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -27,20 +27,18 @@ const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage)
 });
 
-// Firestore mit Offline-Unterstützung
-const firestore = getFirestore(app);
-
-// Offline Persistence aktivieren (nur für Web/React Native)
-if (typeof window !== 'undefined') {
-  enableIndexedDbPersistence(firestore, {
-    cacheSizeBytes: CACHE_SIZE_UNLIMITED
-  }).catch((err) => {
-    if (err.code === 'failed-precondition') {
-      console.warn('Firestore Persistence: Multiple tabs open');
-    } else if (err.code === 'unimplemented') {
-      console.warn('Firestore Persistence: Not available in this browser');
-    }
+// Firestore mit Offline-Persistence (modular API v10+)
+let firestore;
+try {
+  firestore = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentSingleTabManager({ forceOwnership: true })
+    })
   });
+} catch (err) {
+  // Fallback falls bereits initialisiert
+  const { getFirestore } = require('firebase/firestore');
+  firestore = getFirestore(app);
 }
 
 // Firebase Storage

@@ -13,7 +13,7 @@ import {
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, firestore } from '../config/firebase';
 
-const AuthContext = createContext({});
+const AuthContext = createContext(null);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);

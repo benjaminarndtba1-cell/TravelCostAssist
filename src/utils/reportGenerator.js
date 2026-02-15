@@ -344,7 +344,7 @@ tr:nth-child(even){background:#FAFAFA}
 
 <div class="period">
   <strong>Abrechnungszeitraum:</strong>
-  ${format(startDate, 'dd.MM.yyyy', { locale: de })} &ndash; ${format(endDate, 'dd.MM.yyyy', { locale: de })}
+  ${formatDateDE(startDate)} &ndash; ${formatDateDE(endDate)}
   &nbsp;&nbsp;|&nbsp;&nbsp;
   <strong>${reportData.tripReports.length}</strong> ${reportData.tripReports.length === 1 ? 'Dienstreise' : 'Dienstreisen'}
 </div>
@@ -376,7 +376,7 @@ ${tripSections}
     <div class="sig-block"><div class="sig-line">Datum, Unterschrift Reisende/r</div></div>
     <div class="sig-block"><div class="sig-line">Datum, Unterschrift Vorgesetzte/r</div></div>
   </div>
-  <div class="gen-note">Erstellt mit TravelCostAssist am ${format(new Date(), 'dd.MM.yyyy', { locale: de })} um ${format(new Date(), 'HH:mm', { locale: de })} Uhr</div>
+  <div class="gen-note">Erstellt mit TravelCostAssist am ${formatDateDE(new Date())} um ${formatDateDE(new Date(), 'HH:mm')} Uhr</div>
 </div>
 
 </body>
